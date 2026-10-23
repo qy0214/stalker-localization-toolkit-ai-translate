@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 插件运行数据（模型、运行库、配置、日志均由插件在本地生成）
+plugins/ai_translate_assets/bin/
+plugins/ai_translate_assets/models/
+plugins/ai_translate_assets/logs/
+plugins/ai_translate_assets/downloads/
+plugins/ai_translate_assets/config.json
+plugins/ai_translate_assets/*.bak
+
+# 术语构建原始语料 / 词典（仅本地保留，不随公开仓库分发）
+tools/raw_pairs.json
+tools/dict_ns_ogsr_*.json
+tools/dict_current_*.json
+tools/新建 文字文件.txt
+
+# 模型 / 运行库 / 压缩包
+*.gguf
+*.tar.gz
+*.7z
+*.rar
+*.part
+
+# 日志与临时文件
+*.log
+debug.log
+*.tmp
+
+# AI 助手 / 内部工作目录
+.workbuddy/
+reviews/
+_audit_*
+
+# 操作系统 / 编辑器
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+*.lnk

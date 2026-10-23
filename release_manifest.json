@@ -1,0 +1,293 @@
+{
+  "generated_at": "2026-10-23T16:53:56+08:00",
+  "workspace": ".",
+  "scope": "AI 离线翻译插件（ai_translate）",
+  "git": {
+    "branch": "main",
+    "commit": "dcfce48",
+    "single_commit": true,
+    "dirty": false,
+    "dirty_files": []
+  },
+  "versions": {
+    "plugin_version": "1.5.1",
+    "expected_plugin_version": "1.5.1",
+    "target_toolkit": "STALKER Localization Toolkit 1.1.0",
+    "historical_exe_version": "1.1.0.0"
+  },
+  "artifacts": [
+    {
+      "role": "插件分享副本",
+      "path": "plugins\\ai_translate.py",
+      "exists": true,
+      "size": 168532,
+      "sha256": "42b261cd680ab0dbfc858d36b0877fbf526ad8088907dfcaef550869b40725e7",
+      "note": "纯标准库，保留必要安全说明"
+    },
+    {
+      "role": "插件发布 zip",
+      "path": "dist\\ai_translate_plugin_v1.5.1.zip",
+      "exists": true,
+      "size": 267961,
+      "sha256": "b8f3c1d1002e51ec4532729dad832b26f3f2b4708ded5aa17189936a6839c14a",
+      "note": "当前发布包"
+    },
+    {
+      "role": "术语库（扁平）",
+      "path": "plugins\\ai_translate_assets\\glossary_user.json",
+      "exists": true,
+      "size": 285820,
+      "sha256": "804d3814c5a84e27d2b3921aa72dabe38e66b351185358a8e63a3ba10e95cbd4",
+      "note": "运行时匹配"
+    },
+    {
+      "role": "术语基表（分类）",
+      "path": "plugins\\ai_translate_assets\\stalker_termbase.json",
+      "exists": true,
+      "size": 320310,
+      "sha256": "1e0f59668ab509e5eb000e560321acfe99827a74ec989103ad03178549ba864b",
+      "note": "导入用"
+    },
+    {
+      "role": "X-Ray 解析器",
+      "path": "plugins\\ai_translate_assets\\xray_pkg.zip",
+      "exists": true,
+      "size": 7317,
+      "sha256": "b575b4935ddaf2dd4c59a77068731d686aaf26e1e546077e55e1bc0fcb451a30",
+      "note": "解析 XML/LTX/脚本"
+    },
+    {
+      "role": "使用说明",
+      "path": "使用说明.txt",
+      "exists": true,
+      "size": 13367,
+      "sha256": "c071ddf3edb5166436f63afccab56c25bed0e8e9454d0b4609fcdd7ff5467373",
+      "note": "含发布包 SHA-256"
+    },
+    {
+      "role": "术语库处理记录",
+      "path": "术语库_处理记录.md",
+      "exists": true,
+      "size": 6151,
+      "sha256": "a45481a602698bd9361214b0e3a0eb8e53dde343faa4c0b17ad6aee1d120fdc9",
+      "note": "术语口径与修剪记录"
+    },
+    {
+      "role": "大小写冲突清单",
+      "path": "术语库_大小写冲突清单.md",
+      "exists": true,
+      "size": 11712,
+      "sha256": "74ed765010f284411e081c6031c53a00cb22121d547d1e27aa9915645be8d31b",
+      "note": "术语大小写冲突处理"
+    },
+    {
+      "role": "历史工具集 exe",
+      "path": "STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe",
+      "exists": false,
+      "size": 3342336,
+      "sha256": "171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947",
+      "note": "2026-10-23 清单记录；文件已在清理中移除"
+    }
+  ],
+  "zip": {
+    "path": "dist\\ai_translate_plugin_v1.5.1.zip",
+    "sha256": "b8f3c1d1002e51ec4532729dad832b26f3f2b4708ded5aa17189936a6839c14a",
+    "entries": [
+      "plugins/ai_translate.py",
+      "plugins/ai_translate_assets/glossary_user.json",
+      "plugins/ai_translate_assets/stalker_termbase.json",
+      "plugins/ai_translate_assets/xray_pkg.zip"
+    ]
+  },
+  "official_hashes": {
+    "llama": {
+      "cpu": {
+        "file": "llama-b11612-bin-win-cpu-x64.zip",
+        "sha256": "b8456ccb1be98365a5a2227efa5c495508a6a3ebce881c6189a1dbeaaa170b69"
+      },
+      "cuda-12.4": {
+        "file": "llama-b11612-bin-win-cuda-12.4-x64.zip",
+        "sha256": "4c6d8afd23475f6eded74c4a3019a6746aab83183a3158f3fc4de1cb7c4f5f12"
+      },
+      "vulkan": {
+        "file": "llama-b11612-bin-win-vulkan-x64.zip",
+        "sha256": "e62f0674970a70b007fa3c425d191ceacabbf02406d6c9ac8b6f27cd23abe9e9"
+      },
+      "cudart-12.4": {
+        "file": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+        "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+      }
+    },
+    "models": {
+      "Hy-MT2-7B-Q4_K_M.gguf": {
+        "sha256": "9f96256500f3fc1ab4d64336b58f52a949a95ad7516b0c229476eef782f9f77b",
+        "bytes": 4624648896
+      },
+      "Hy-MT2-1.8B-Q8_0.gguf": {
+        "sha256": "5c3fe0b1408a5ceb0143184ef247b11b579c525f4b02b060e6c851bb76fef1a4",
+        "bytes": 1908528192
+      },
+      "HY-MT1.5-1.8B-Q8_0.gguf": {
+        "sha256": "6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e",
+        "bytes": 1908528288
+      }
+    }
+  },
+  "consistency": [
+    {
+      "check": "插件语法",
+      "ok": true,
+      "detail": "compile() 通过"
+    },
+    {
+      "check": "插件版本 == 预期",
+      "ok": true,
+      "detail": "PLUGIN_INFO 1.5.1 / 预期 1.5.1"
+    },
+    {
+      "check": "zip 文件名含插件版本",
+      "ok": true,
+      "detail": "ai_translate_plugin_v1.5.1.zip"
+    },
+    {
+      "check": "zip 条目 == 4 个预期文件",
+      "ok": true,
+      "detail": "多出：无；缺少：无"
+    },
+    {
+      "check": "zip 不含空目录/运行库/模型/日志",
+      "ok": true,
+      "detail": "干净"
+    },
+    {
+      "check": "zip 内文件 == 分享副本",
+      "ok": true,
+      "detail": "全部一致"
+    },
+    {
+      "check": "官方哈希：llama.cpp 4 项",
+      "ok": true,
+      "detail": "登记 4 项；不一致：无"
+    },
+    {
+      "check": "官方哈希：模型 3 项",
+      "ok": true,
+      "detail": "登记 3 项；不一致：无"
+    },
+    {
+      "check": "官方哈希：7 个合法 SHA-256",
+      "ok": true,
+      "detail": "7 个"
+    },
+    {
+      "check": "官方哈希：llama.cpp 标签 b11612",
+      "ok": true,
+      "detail": "源码常量"
+    },
+    {
+      "check": "分享包不含 bin/models/logs/downloads/config.json",
+      "ok": true,
+      "detail": "干净"
+    },
+    {
+      "check": "无绝对路径/用户名泄漏",
+      "ok": true,
+      "detail": "未发现"
+    },
+    {
+      "check": "术语基表：total_entries == 分类合计",
+      "ok": true,
+      "detail": "8208 / 8208"
+    },
+    {
+      "check": "术语库：扁平条目 >= 8000",
+      "ok": true,
+      "detail": "8246 条"
+    },
+    {
+      "check": "术语库：扁平 >= 分类基表",
+      "ok": true,
+      "detail": "8246 / 8208"
+    },
+    {
+      "check": "使用说明含 exe SHA-256",
+      "ok": true,
+      "detail": "171ce0028151d06b…"
+    },
+    {
+      "check": "使用说明含当前 zip SHA-256",
+      "ok": true,
+      "detail": "b8f3c1d1002e51ec…"
+    },
+    {
+      "check": "使用说明含插件版本",
+      "ok": true,
+      "detail": "ai_translate 1.5.1"
+    },
+    {
+      "check": "dist 不含旧版 v1.5.0 zip",
+      "ok": true,
+      "detail": "已移除"
+    }
+  ],
+  "term_data": {
+    "glossary_user_entries": 8246,
+    "termbase_entries": 8208,
+    "termbase_categories": {
+      "阵营与组织": 34,
+      "人物与军衔": 2952,
+      "地点与区域": 358,
+      "变异生物": 42,
+      "物品·武器·装备·神器": 680,
+      "任务": 908,
+      "百科与术语": 2862,
+      "界面与提示": 344,
+      "新闻·对话·其他": 28
+    }
+  },
+  "storage": [
+    {
+      "role": "运行时备份",
+      "path": ".workbuddy\\backups\\ai_translate_cleanup_20261015_154625\\bin",
+      "exists": false,
+      "size": 0,
+      "files": 0,
+      "note": "已删除；插件按官方哈希重新下载"
+    },
+    {
+      "role": "旧插件包 1.4.0",
+      "path": "ai_translate_plugin_1.4.0.zip",
+      "exists": false,
+      "size": 0,
+      "files": 0,
+      "note": "已删除（2026-10-23）"
+    },
+    {
+      "role": "旧解析器压缩包",
+      "path": "plugins.rar",
+      "exists": false,
+      "size": 0,
+      "files": 0,
+      "note": "已删除（核对无独有文件）"
+    },
+    {
+      "role": "陈旧 assets 副本",
+      "path": "STALKER Localization Toolkit 1.1.0",
+      "exists": false,
+      "size": 0,
+      "files": 0,
+      "note": "已删除（仅剩旧 xray_pkg.zip）"
+    }
+  ],
+  "historical_exe": {
+    "path": "STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe",
+    "file_version": "1.1.0.0",
+    "size": 3342336,
+    "sha256": "171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947",
+    "note": "2026-10-23 清单记录；文件已在清理中移除"
+  },
+  "tracked": {
+    "files": 22,
+    "bytes": 1585510
+  }
+}
