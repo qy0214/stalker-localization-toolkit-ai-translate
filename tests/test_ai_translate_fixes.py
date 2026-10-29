@@ -1220,13 +1220,161 @@ def t22_sources():
 
 
 # ----------------------------------------------------------------------
+# T23 GPU 检测四字段
+# ----------------------------------------------------------------------
+def t23_gpu_detect():
+    print()
+    print("--- T23 GPU 检测（驱动 / 计算能力） ---")
+
+    class R4(object):
+        returncode = 0
+        stdout = "NVIDIA GeForce RTX 4090, 24564, 610.60, 8.9\n"
+
+    class R2(object):
+        returncode = 0
+        stdout = "NVIDIA GeForce GTX 1050, 2048\n"
+
+    class RFail(object):
+        returncode = 1
+        stdout = ""
+
+    real = ait.subprocess.run
+    calls = {"n": 0}
+
+    def fake_fail_then_legacy(*a, **k):
+        calls["n"] += 1
+        return RFail() if calls["n"] == 1 else R2()
+
+    try:
+        ait.subprocess.run = lambda *a, **k: R4()
+        got = ait.detect_nvidia_gpu()
+        ait.subprocess.run = fake_fail_then_legacy
+        got2 = ait.detect_nvidia_gpu()
+    finally:
+        ait.subprocess.run = real
+    check("T23-1 nvidia-smi 四字段解析（名称/显存/驱动/CC）",
+          got == ("NVIDIA GeForce RTX 4090", 24564, "610.60", 8.9), str(got))
+    check("T23-2 老驱动不支持 compute_cap -> 退回两字段查询（不误判无卡）",
+          got2 == ("NVIDIA GeForce GTX 1050", 2048, "", 0.0)
+          and calls["n"] == 2, "%s / calls=%d" % (got2, calls["n"]))
+
+
+# ----------------------------------------------------------------------
+# T24 CUDA 13.4 门槛
+# ----------------------------------------------------------------------
+def t24_cuda13_gate():
+    print()
+    print("--- T24 CUDA 13.4 门槛 ---")
+    cases = [("610.60", "8.6", True), ("580.65", "7.5", True),
+             ("579.99", "8.6", False), ("610", "7.4", False),
+             ("", "", False), (None, None, False)]
+    bad = [(d, c, ait.cuda13_supported(d, c), w) for d, c, w in cases
+           if ait.cuda13_supported(d, c) != w]
+    check("T24-1 驱动 >=580 且 CC >=7.5 才判为可尝试", not bad, str(bad))
+
+
+# ----------------------------------------------------------------------
+# T25 CUDA 13.4 下载任务与镜像
+# ----------------------------------------------------------------------
+def t25_cuda13_task():
+    print()
+    print("--- T25 CUDA 13.4 下载源 ---")
+    t = ait.DOWNLOAD_TASKS.get("bin_cuda13") or {}
+    extra = t.get("extra_runtime") or {}
+    check("T25-1 13.4 任务存在且哈希为官方值",
+          t.get("variant") == "cuda13"
+          and t.get("sha256") == "e1c59ee10ead069dee12bf5a1f5a3ed294b144ea3f9c5006aa89675c5306de38"
+          and extra.get("sha256") == "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
+          "%s / %s" % (t.get("variant"), (t.get("sha256") or "")[:12]))
+    n_main = len(t.get("sources") or [])
+    n_rt = len(ait._gh_sources(extra.get("url") or ""))
+    check("T25-2 13.4 主包与 cudart 各 >=20 个下载源（任意网络可换源）",
+          n_main >= 20 and n_rt >= 20
+          and "cuda-13.4" in (extra.get("url") or ""),
+          "主包 %d / cudart %d" % (n_main, n_rt))
+
+
+# ----------------------------------------------------------------------
+# T26 CUDA 13.4 启动失败/未上卡 → 自动回退 12.4
+# ----------------------------------------------------------------------
+def t26_cuda13_fallback():
+    print()
+    print("--- T26 CUDA 13.4 回退 ---")
+    import queue as _queue
+
+    def make_tab():
+        tab = ait.AiTranslateTab.__new__(ait.AiTranslateTab)
+        tab._q = _queue.Queue()
+        tab._tk = None
+        tab._top = None
+        tab.log_lines = []
+        tab._log_ui_error = lambda fn, e: None
+        tab.api = type("A", (), {"log_detail": lambda *a: None})()
+        tab.logs = []
+        tab.log = lambda msg, tag="info": tab.logs.append(msg)
+        tab._push_prompt_extra = lambda: None
+        tab.find_exe = lambda v=None: (
+            "C:/fake/cuda12/llama-server.exe" if v == "cuda" else None)
+        return tab
+
+    def fake_server_cls(raise_on_13, gpu_13=False):
+        class FakeSrv(object):
+            def __init__(self, exe, model, variant, log, ctx_size=8192,
+                         tier="", gpu_layers=99):
+                self.exe = exe
+                self.model = model
+                self.variant = variant
+                self.ctx_size = ctx_size
+                self.gpu_verified = (variant == "cuda")
+                self.health_warn = ""
+
+            def start(self, **kw):
+                if self.variant == "cuda13":
+                    if raise_on_13:
+                        raise IOError("模拟 13.4 初始化失败")
+                    self.gpu_verified = gpu_13
+                return True
+
+            def stop(self):
+                pass
+
+            def is_running(self):
+                return True
+        return FakeSrv
+
+    real = ait.LlamaServer
+    try:
+        tab = make_tab()
+        ait.LlamaServer = fake_server_cls(raise_on_13=True)
+        srv = tab._spawn_server("exe13", "m.gguf", "cuda13", 4096, "custom")
+        ok1 = (srv.variant == "cuda"
+               and any("已回退到 CUDA 12.4" in x for x in tab.logs))
+    finally:
+        ait.LlamaServer = real
+    check("T26-1 13.4 启动异常 → 自动回退 12.4", ok1,
+          "%s / %s" % (getattr(srv, "variant", None), tab.logs[-2:]))
+
+    try:
+        tab2 = make_tab()
+        ait.LlamaServer = fake_server_cls(raise_on_13=False, gpu_13=False)
+        srv2 = tab2._spawn_server("exe13", "m.gguf", "cuda13", 4096, "custom")
+        ok2 = (srv2.variant == "cuda"
+               and any("未能在 GPU 上初始化" in x for x in tab2.logs))
+    finally:
+        ait.LlamaServer = real
+    check("T26-2 13.4 未上卡 → 自动回退 12.4", ok2,
+          "%s / %s" % (getattr(srv2, "variant", None), tab2.logs[-2:]))
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
                t11_download, t12_ui_call, t13_vendor, t14_prompt_extra,
                t15_hint_block, t16_prompt_cache, t17_ledger,
                t18_glossary_layers, t19_atomic_split, t20_verify_switch,
-               t21_self_check, t22_sources):
+               t21_self_check, t22_sources, t23_gpu_detect,
+               t24_cuda13_gate, t25_cuda13_task, t26_cuda13_fallback):
         try:
             fn()
         except Exception as e:

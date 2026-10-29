@@ -40,11 +40,12 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.6.3",
+    "version": "1.7.0",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
-                   "CPU/CUDA/Vulkan 三后端并自动检测显卡；内置无限制强制术语库",
+                   "CPU / CUDA 12.4 / CUDA 13.4 / Vulkan 四后端并自动检测显卡；"
+                   "内置无限制强制术语库",
 }
 
 APP_NAME = "ai_translate"
@@ -196,6 +197,8 @@ _GH_BASE = ("https://github.com/ggml-org/llama.cpp/releases/download/"
             + _LLAMA_TAG + "/llama-" + _LLAMA_TAG + "-bin-win-{variant}-x64.zip")
 _GH_CUDART = ("https://github.com/ggml-org/llama.cpp/releases/download/"
               + _LLAMA_TAG + "/cudart-llama-bin-win-cuda-12.4-x64.zip")
+_GH_CUDART13 = ("https://github.com/ggml-org/llama.cpp/releases/download/"
+                + _LLAMA_TAG + "/cudart-llama-bin-win-cuda-13.4-x64.zip")
 
 # 官方 SHA-256（2026-10-23 取自发布方元数据）：
 # 运行库 = llama.cpp b11612 GitHub Release asset digest；
@@ -205,6 +208,9 @@ _LLAMA_SHA256 = {
     "cuda-12.4": "4c6d8afd23475f6eded74c4a3019a6746aab83183a3158f3fc4de1cb7c4f5f12",
     "vulkan": "e62f0674970a70b007fa3c425d191ceacabbf02406d6c9ac8b6f27cd23abe9e9",
     "cudart-12.4": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+    # CUDA 13.4（2026-10-29 取自同一 Release 的 asset digest）
+    "cuda-13.4": "e1c59ee10ead069dee12bf5a1f5a3ed294b144ea3f9c5006aa89675c5306de38",
+    "cudart-13.4": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
 }
 _MODEL_HASHES = {
     "Hy-MT2-7B-Q4_K_M.gguf": (
@@ -407,6 +413,20 @@ DOWNLOAD_TASKS.update({
         },
         "sources": _gh_sources(_GH_BASE.format(variant="cuda-12.4")),
     },
+    "bin_cuda13": {
+        "label": "llama.cpp CUDA 13.4 运行库（约 580 MB，需 580+ 驱动 / Turing+）",
+        "kind": "zip", "variant": "cuda13",
+        "filename": "llama-server.exe",
+        "size_hint": 0.58,
+        "sha256": _LLAMA_SHA256["cuda-13.4"],
+        "extra_runtime": {
+            "url": _GH_CUDART13,
+            "marks": _CUDART_MARKS,
+            "label": "CUDA 13 运行时（cudart/cublas）",
+            "sha256": _LLAMA_SHA256["cudart-13.4"],
+        },
+        "sources": _gh_sources(_GH_BASE.format(variant="cuda-13.4")),
+    },
     "bin_vulkan": {
         "label": "llama.cpp Vulkan GPU 运行库（约 31 MB，A/N/I 显卡通用）",
         "kind": "zip", "variant": "vulkan",
@@ -419,16 +439,19 @@ DOWNLOAD_TASKS.update({
 
 VARIANT_LABELS = {
     "cpu": "CPU（兼容性好，不占显存）",
-    "cuda": "CUDA（NVIDIA 显卡，最快）",
+    "cuda": "CUDA 12.4（NVIDIA 显卡，兼容性最好）",
+    "cuda13": "CUDA 13.4（需 580+ 驱动 / Turing+，可选）",
     "vulkan": "Vulkan（A/N/I 显卡通用加速）",
 }
-GPU_VARIANTS = ("cuda", "vulkan")
+VARIANT_ORDER = ("cpu", "cuda", "cuda13", "vulkan")
+GPU_VARIANTS = ("cuda", "cuda13", "vulkan")
 
 TIER_LABELS = [TIER_SHORT[t] for t in TIER_ORDER]
 _LABEL_TO_TIER = {TIER_SHORT[t]: t for t in TIER_ORDER}
 _LABEL_TO_TIER.update({TIER_PROFILES[t]["combo"]: t for t in TIER_ORDER})
 _MODEL_TASK_ORDER = [TIER_PROFILES[t]["task"] for t in BUILTIN_TIERS]
-TASK_KEY_ORDER = _MODEL_TASK_ORDER + ["bin_cpu", "bin_cuda", "bin_vulkan"]
+TASK_KEY_ORDER = _MODEL_TASK_ORDER + ["bin_cpu", "bin_cuda",
+                                    "bin_cuda13", "bin_vulkan"]
 TIER_BY_TASK = {TIER_PROFILES[t]["task"]: t for t in BUILTIN_TIERS}
 TIER_FILE = {t: TIER_PROFILES[t]["file"] for t in BUILTIN_TIERS}
 TIER_ALIAS = {"1b8": "mt2"}
@@ -453,25 +476,61 @@ def _fmt_eta(sec):
 
 
 def detect_nvidia_gpu():
-    """通过 nvidia-smi 探测 NVIDIA 独显，返回 (名称, 显存MB) 或 None。
-    纯本地、无网络；nvidia-smi 随驱动安装。"""
-    try:
-        r = subprocess.run(
-            ["nvidia-smi",
-             "--query-gpu=name,memory.total",
+    """通过 nvidia-smi 探测 NVIDIA 独显。
+
+    返回 (名称, 显存MB, 驱动版本, compute_cap)；无 N 卡/取不到返回 None。
+    纯本地、无网络；nvidia-smi 随驱动安装。旧版只取前两项，1.7.0 起带上
+    驱动版本与计算能力，用于判断能否使用 CUDA 13.4 构建。
+    """
+    def query(fields):
+        return subprocess.run(
+            ["nvidia-smi", "--query-gpu=" + fields,
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=8,
             creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0)))
+
+    try:
+        r = query("name,memory.total,driver_version,compute_cap")
+        legacy = False
+        if r.returncode != 0:
+            # 老驱动不认识 compute_cap：退回 1.x 的两字段查询，至少别把 N 卡
+            # 误判成"没有独显"（那样会白白降到 Vulkan/CPU）。
+            r = query("name,memory.total")
+            legacy = True
         if r.returncode != 0:
             return None
-        line = (r.stdout or "").strip().splitlines()
-        if not line:
+        lines = (r.stdout or "").strip().splitlines()
+        if not lines:
             return None
-        name, _, mem = line[0].partition(",")
-        mem = "".join(ch for ch in mem if ch.isdigit())
-        return (name.strip(), int(mem) if mem else 0)
+        parts = [x.strip() for x in lines[0].split(",")]
+        name = parts[0] if parts else ""
+        mem = "".join(ch for ch in (parts[1] if len(parts) > 1 else "")
+                      if ch.isdigit())
+        driver = "" if legacy or len(parts) <= 2 else parts[2]
+        try:
+            cc = 0.0 if legacy or len(parts) <= 3 else float(parts[3])
+        except (TypeError, ValueError):
+            cc = 0.0
+        return (name, int(mem) if mem else 0, driver, cc)
     except Exception:
         return None
+
+
+def cuda13_supported(driver, compute_cap):
+    """CUDA 13.x 构建的门槛：驱动主版本 ≥ 580 且计算能力 ≥ 7.5（Turing+）。
+
+    这是"可尝试"的判据，不是保证：OEM/笔记本驱动、Optimus、UMD 与 Toolkit
+    版本差异都可能让实际初始化失败，所以调用方还要用真实启动 + GPU 层验证兜底。
+    """
+    try:
+        major = int(str(driver).strip().split(".")[0])
+    except (TypeError, ValueError):
+        return False
+    try:
+        cc = float(compute_cap)
+    except (TypeError, ValueError):
+        return False
+    return major >= 580 and cc >= 7.5
 
 
 _IGPU_MARKERS = ("microsoft basic", "basic display", "remote", "citrix",
@@ -574,14 +633,17 @@ def detect_hardware():
             continue
         discrete_other = (name, vram)
     if nv:
-        name, vram = nv
-        variant = "cuda"
+        name, vram, driver, cc = nv
+        variant = "cuda"          # 默认 12.4；13.4 需用户显式选择
+        cuda13_ok = cuda13_supported(driver, cc)
         tier = "7b" if vram >= 5120 else ("mt2" if vram >= 3072 else "mt15")
-        short = "%s %dGB → CUDA + %s" % (
+        short = "%s %dGB → CUDA 12.4 + %s%s" % (
             name.replace("NVIDIA GeForce ", ""), round(vram/1024, 1),
-            {"7b": "精雕7B", "mt2": "精准1.8B", "mt15": "神速1.5"}[tier])
+            {"7b": "精雕7B", "mt2": "精准1.8B", "mt15": "神速1.5"}[tier],
+            ("（CUDA 13.4 可用）" if cuda13_ok else ""))
         return {"variant": variant, "tier": tier, "gpu_name": name,
-                "vram": vram, "short": short}
+                "vram": vram, "short": short, "driver": driver,
+                "compute_cap": cc, "cuda13_ok": cuda13_ok}
     if discrete_other:
         name, vram = discrete_other
         tier = "mt2" if vram >= 3072 else "mt15"
@@ -1447,13 +1509,14 @@ class LlamaServer(object):
             on_gpu, total = int(m.group(1)), int(m.group(2))
         else:
             dev_pat = {"cuda": r"assigned to device cuda\d+",
+                       "cuda13": r"assigned to device cuda\d+",
                        "vulkan": r"assigned to device vulkan"}.get(self.variant)
             if dev_pat:
                 on_gpu = len(re.findall(dev_pat, low))
                 total = on_gpu + len(re.findall(
                     r"assigned to device cpu", low))
         dev_ok = False
-        if self.variant == "cuda":
+        if self.variant in ("cuda", "cuda13"):
             dev_ok = ("using device cuda" in low
                       or "assigned to device cuda" in low)
         elif self.variant == "vulkan":
@@ -1543,7 +1606,8 @@ class LlamaServer(object):
         flags = 0
         if hasattr(subprocess, "CREATE_NO_WINDOW"):
             flags = subprocess.CREATE_NO_WINDOW
-        backend_name = {"cpu": "CPU", "cuda": "CUDA/GPU",
+        backend_name = {"cpu": "CPU", "cuda": "CUDA 12.4/GPU",
+                        "cuda13": "CUDA 13.4/GPU",
                         "vulkan": "Vulkan/GPU"}.get(self.variant, self.variant)
         self.log("启动 llama-server（%s，%s 档，%d 层 GPU offload，"
                  "上下文 %d token），端口 %d"
@@ -3111,6 +3175,7 @@ class AiTranslateTab(object):
         self._prompt_extra_text = str(self.cfg.get("prompt_extra") or "")
         self._starting = False
         self._cfg_save_warned = False
+        self._hw_cuda13_ok = False
         self.scan_info = None
         self.scan_dir = None
         self._mode_plain = self.cfg.get("mode", "auto")
@@ -3140,9 +3205,10 @@ class AiTranslateTab(object):
 
     def _apply_hw(self, hw, silent=False):
         self._set_label(self.hw_label, hw["short"])
+        self._hw_cuda13_ok = bool(hw.get("cuda13_ok"))
         if not self.cfg.get("variant_chosen"):
-            vals = [VARIANT_LABELS[v] for v in ("cpu", "cuda", "vulkan")]
-            vi = ("cpu", "cuda", "vulkan").index(hw["variant"])
+            vals = [VARIANT_LABELS[v] for v in VARIANT_ORDER]
+            vi = VARIANT_ORDER.index(hw["variant"])
             _combo_set(self.variant_combo, vals, vi)
             self._on_variant(save_chosen=False)
         if not self.cfg.get("tier_chosen"):
@@ -3258,13 +3324,13 @@ class AiTranslateTab(object):
         r = self._reg(ui.row(p))
         ui.pack(r, fill="x", pady=1)
         ui.pack(ui.label(r, "后端："), side="left")
-        variant_vals = [VARIANT_LABELS[v] for v in ("cpu", "cuda", "vulkan")]
+        variant_vals = [VARIANT_LABELS[v] for v in VARIANT_ORDER]
         self.variant_combo = self._reg(ui.combo(
-            r, values=variant_vals, width=30,
+            r, values=variant_vals, width=46,
             on_change=lambda v: self._on_variant()))
         ui.pack(self.variant_combo, side="left", padx=(0, 6))
-        vi = ("cpu", "cuda", "vulkan").index(self.cfg["variant"]) \
-            if self.cfg["variant"] in ("cpu", "cuda", "vulkan") else 0
+        vi = VARIANT_ORDER.index(self.cfg["variant"]) \
+            if self.cfg["variant"] in VARIANT_ORDER else 0
         _combo_set(self.variant_combo, variant_vals, vi)
         self.btn_probe_rt = self._reg(
             ui.button(r, "测速选源", on_click=lambda: self.on_probe("rt")))
@@ -3457,6 +3523,8 @@ class AiTranslateTab(object):
 
     def current_variant(self):
         label = _combo_get(self.variant_combo)
+        if label.startswith("CUDA 13"):
+            return "cuda13"
         if label.startswith("CUDA"):
             return "cuda"
         if label.startswith("Vulkan"):
@@ -3465,6 +3533,9 @@ class AiTranslateTab(object):
 
     def _on_variant(self, save_chosen=True):
         v = self.current_variant()
+        if v == "cuda13" and not getattr(self, "_hw_cuda13_ok", False):
+            self.log("当前驱动/显卡可能不支持 CUDA 13.4（需 580+ 驱动 / "
+                     "Turing+）；仍可尝试，启动失败会自动回退 CUDA 12.4", "warn")
         self.cfg["variant"] = v
         if save_chosen:
             self.cfg["variant_chosen"] = True
@@ -3513,7 +3584,7 @@ class AiTranslateTab(object):
             direct = os.path.join(base, variant, "llama-server.exe")
             if not os.path.isfile(direct):
                 continue
-            if variant == "cuda" and not self._cudart_present(
+            if variant in ("cuda", "cuda13") and not self._cudart_present(
                     os.path.dirname(direct)):
                 continue
             return direct
@@ -3546,7 +3617,8 @@ class AiTranslateTab(object):
             files = {f.lower() for f in os.listdir(d)}
         except OSError:
             return False
-        if variant == "cuda" and any(f.startswith("ggml-cuda") for f in files):
+        if variant in ("cuda", "cuda13") and any(
+                f.startswith("ggml-cuda") for f in files):
             return True
         if variant == "vulkan" and any("vulkan" in f for f in files):
             return True
@@ -4301,13 +4373,7 @@ class AiTranslateTab(object):
                     if old is not None:
                         old.stop()
                     self.server = None
-                srv = LlamaServer(
-                    exe, model, variant,
-                    log=lambda m, tag="info": self.ui_call(self.log, m, tag),
-                    ctx_size=ctx, tier=tier)
-                self.server = srv
-                self._push_prompt_extra()
-                srv.start()
+                self._spawn_server(exe, model, variant, ctx, tier)
                 self.ui_call(self._engine_ui, True)
             except Exception as e:
                 self.ui_call(self.log, "引擎启动失败：%s" % e, "err")
@@ -4317,6 +4383,57 @@ class AiTranslateTab(object):
                 self.ui_call(self._engine_ui,
                              bool(self.server and self.server.is_running()))
         threading.Thread(target=work, daemon=True).start()
+
+    def _spawn_server(self, exe, model, variant, ctx, tier):
+        """创建并启动引擎；CUDA 13.4 起不来或没上卡时自动回退 CUDA 12.4。
+
+        13.4 的可用性只有"驱动 ≥ 580 / 计算能力 ≥ 7.5"这个门槛判据，
+        实际能否初始化还受 OEM 驱动、Optimus、cudart DLL 等影响，所以这里
+        用真实启动 + gpu_verified 兜底，失败就退回兼容面更广的 12.4。
+        """
+        def build(v, e):
+            return LlamaServer(
+                e, model, v,
+                log=lambda m, tag="info": self.ui_call(self.log, m, tag),
+                ctx_size=ctx, tier=tier)
+
+        def fallback(reason):
+            self.ui_call(self.log, "CUDA 13.4 %s，尝试回退 CUDA 12.4…"
+                         % reason, "warn")
+            try:
+                srv.stop()
+            except Exception:
+                pass
+            exe12 = self.find_exe("cuda")
+            if not exe12:
+                self.ui_call(self.log,
+                             "未安装 CUDA 12.4 运行库，无法回退；"
+                             "请下载运行库或改用 Vulkan/CPU", "err")
+                return None
+            srv12 = build("cuda", exe12)
+            self.server = srv12
+            self._push_prompt_extra()
+            srv12.start()
+            self.ui_call(self.log, "已回退到 CUDA 12.4", "ok")
+            return srv12
+
+        srv = build(variant, exe)
+        self.server = srv
+        self._push_prompt_extra()
+        try:
+            srv.start()
+        except Exception:
+            if variant != "cuda13":
+                raise
+            fb = fallback("启动失败")
+            if fb is not None:
+                return fb
+            raise
+        if variant == "cuda13" and not getattr(srv, "gpu_verified", False):
+            fb = fallback("未能在 GPU 上初始化")
+            if fb is not None:
+                return fb
+        return srv
 
     def _engine_ui(self, on):
         self.ui.set_state(self.btn_start, "normal" if not on else "disabled")
@@ -4387,20 +4504,19 @@ class AiTranslateTab(object):
                     self.ui_call(self._run_done)
                     return
                 model, exe, tier, ctx = plan
-                if self.server and self.server.is_running():
-                    sig = (self.server.model, self.server.variant)
-                    if sig != (model, cap_variant):
-                        self.ui_call(self.log,
-                            "正在切换到 %s 档（停止旧引擎并以新模型重启）…"
-                            % TIER_PROFILES[tier]["combo"][:2], "warn")
-                        self.server.stop()
-                        self.server = None
-                if not (self.server and self.server.is_running()):
-                    self.server = LlamaServer(
-                        exe, model, cap_variant,
-                        log=lambda m, tag="info": self.ui_call(self.log, m, tag),
-                        ctx_size=ctx, tier=tier)
-                    self.server.start()
+                running = bool(self.server and self.server.is_running())
+                reusable = running and self.server.model == model and (
+                    self.server.variant == cap_variant
+                    or (cap_variant == "cuda13"
+                        and self.server.variant == "cuda"))
+                if running and not reusable:
+                    self.ui_call(self.log,
+                        "正在切换到 %s 档（停止旧引擎并以新模型重启）…"
+                        % TIER_PROFILES[tier]["combo"][:2], "warn")
+                    self.server.stop()
+                    self.server = None
+                if not reusable:
+                    self._spawn_server(exe, model, cap_variant, ctx, tier)
                     if getattr(self.server, "health_warn", ""):
                         self.ui_call(self.log,
                                      "注意：" + self.server.health_warn, "warn")

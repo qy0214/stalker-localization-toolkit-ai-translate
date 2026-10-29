@@ -45,27 +45,27 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.6.3.zip` | 可直接分发的插件包 |
-| `tests/` | 103 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.7.0.zip` | 可直接分发的插件包 |
+| `tests/` | 110 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.6.3`
+- 插件版本：`ai_translate 1.7.0`
 - 当前 zip SHA-256：
-  `1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02`
-- 下载链路官方哈希：llama.cpp `b11612` 的 4 个 Windows 包 + 3 个 HuggingFace 模型
+  `5eab029c23411f2d8a5c641d5f7bdc2b834fdc629e2d3befbe0769bd68ee3fcf`
+- 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.6.3.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.7.0.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.6.3 变更摘要
+## 1.6.0 – 1.7.0 变更摘要
 
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
@@ -91,13 +91,17 @@ Get-FileHash 'dist\ai_translate_plugin_v1.6.3.zip' -Algorithm SHA256
   （gh-proxy.org / gh.nxnow / gh.catmak / gh.monlor），模型新增
   hf-mirror.net 与 ModelScope 的 download 端点；**原有源全部保留**，
   作为不同地区/运营商的备援，下载前逐个测速择优。
+- **1.7.0**：新增 **CUDA 13.4** 可选运行库（官方 b11612 的 cuda-13.4 构建 +
+  cudart 13.4），主包与 cudart 各 **23 个下载源**；硬件检测扩展为
+  `(名称, 显存, 驱动版本, compute_cap)`，按「驱动 ≥ 580 且 CC ≥ 7.5」
+  判断可尝试性；启动失败或未上卡会自动回退 CUDA 12.4。默认仍为 12.4（兼容面最广）。
 - 发布清单改为**真校验**：术语基表按实际分类求和、新增"tools 副本 == 随包"
   与"dist 只保留当前版本 zip"检查；CI 用 `--check` 做漂移门禁。
 
 ## 开发与测试
 
 ```powershell
-# 103 项回归测试
+# 110 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性

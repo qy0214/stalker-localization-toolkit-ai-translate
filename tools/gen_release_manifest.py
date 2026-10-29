@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.6.3.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.7.0.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.6.3.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.7.0.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.6.3"
+EXPECTED_PLUGIN_VERSION = "1.7.0"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
@@ -48,6 +48,10 @@ EXPECTED_LLAMA = {
                "e62f0674970a70b007fa3c425d191ceacabbf02406d6c9ac8b6f27cd23abe9e9"),
     "cudart-12.4": ("cudart-llama-bin-win-cuda-12.4-x64.zip",
                     "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
+    "cuda-13.4": ("llama-b11612-bin-win-cuda-13.4-x64.zip",
+                  "e1c59ee10ead069dee12bf5a1f5a3ed294b144ea3f9c5006aa89675c5306de38"),
+    "cudart-13.4": ("cudart-llama-bin-win-cuda-13.4-x64.zip",
+                    "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668"),
 }
 
 # 2026-10-23 从 HuggingFace LFS oid 取得（hf-mirror API，官方仓库元数据）。
@@ -330,7 +334,7 @@ def build_manifest() -> dict[str, Any]:
     # 官方哈希表
     expected_llama = {k: v[1] for k, v in EXPECTED_LLAMA.items()}
     checks.append(check(
-        "官方哈希：llama.cpp 4 项", meta["llama"] == expected_llama,
+        "官方哈希：llama.cpp 6 项", meta["llama"] == expected_llama,
         "登记 %d 项；不一致：%s" % (
             len(meta["llama"]),
             sorted(set(expected_llama.items()) ^ set(meta["llama"].items())) or "无")))
@@ -341,7 +345,7 @@ def build_manifest() -> dict[str, Any]:
             sorted(set(EXPECTED_MODELS.items()) ^ set(meta["models"].items())) or "无")))
     all_hashes = list(meta["llama"].values()) + [v[0] for v in meta["models"].values()]
     checks.append(check(
-        "官方哈希：7 个合法 SHA-256", len(all_hashes) == 7 and
+        "官方哈希：9 个合法 SHA-256", len(all_hashes) == 9 and
         all(re.fullmatch(r"[0-9a-f]{64}", h or "") for h in all_hashes),
         "%d 个" % len(all_hashes)))
     checks.append(check(
