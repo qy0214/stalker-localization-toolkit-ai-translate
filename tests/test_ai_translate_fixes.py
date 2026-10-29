@@ -1468,6 +1468,45 @@ def t29_log_volume():
 
 
 # ----------------------------------------------------------------------
+# T30 llama-server 日志级别
+# ----------------------------------------------------------------------
+def t30_server_log_level():
+    print()
+    print("--- T30 服务端日志级别 ---")
+    import inspect
+    src = inspect.getsource(ait.LlamaServer._start_once)
+    check("T30-1 使用 -lv 4 而非最大 verbose（25MB/次 -> 16KB/次）",
+          '"-lv"' in src and '"4"' in src and '"--verbose"' not in src)
+
+    log = os.path.join(TMP, "cuda_lv4.log")
+    with open(log, "w", encoding="utf-8") as f:
+        f.write("0.00 I llama_prepare_model_devices: using device CUDA0 "
+                "(NVIDIA GeForce RTX 3060)\n"
+                "0.00 I load_tensors: offloaded 43/43 layers to GPU\n")
+    srv = ait.LlamaServer("x.exe", "y.gguf", "cuda",
+                          log=lambda *a, **k: None)
+    srv.log_file = log
+    ok = srv._verify_gpu()
+    check("T30-2 -lv 4 日志足以判定 GPU 上卡（43/43）",
+          ok and srv.gpu_verified and srv.gpu_offloaded == (43, 43),
+          str(getattr(srv, "gpu_offloaded", None)))
+
+
+# ----------------------------------------------------------------------
+# T31 条目级进度通道
+# ----------------------------------------------------------------------
+def t31_progress_channel():
+    print()
+    print("--- T31 条目进度通道 ---")
+    import inspect
+    import re
+    src = inspect.getsource(ait.AiTranslateTab.on_run)
+    gui_prog = re.search(r'ui_call\(\s*self\.log,\s*"  进度', src) is not None
+    check("T31-1 条目进度只写运行日志，不再进界面日志（峰值 470 条/秒）",
+          not gui_prog and "progress=lambda d: self.api.log_detail(" in src)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1476,7 +1515,8 @@ def main():
                t18_glossary_layers, t19_atomic_split, t20_verify_switch,
                t21_self_check, t22_sources, t23_gpu_detect,
                t24_cuda13_gate, t25_cuda13_task, t26_cuda13_fallback,
-               t27_log_batch, t28_pump_budget, t29_log_volume):
+               t27_log_batch, t28_pump_budget, t29_log_volume,
+               t30_server_log_level, t31_progress_channel):
         try:
             fn()
         except Exception as e:

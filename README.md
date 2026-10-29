@@ -45,27 +45,27 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.7.1.zip` | 可直接分发的插件包 |
-| `tests/` | 116 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.7.2.zip` | 可直接分发的插件包 |
+| `tests/` | 119 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.7.1`
+- 插件版本：`ai_translate 1.7.2`
 - 当前 zip SHA-256：
-  `39dd38f17a230d558d346ea6d75a496f469cb6aa68fe7a4fa7a689801eb61dac`
+  `6a31608aedf6b59635b27fa35258d7f75c0cabfa880b57b0fb38cc322e8020a3`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.7.1.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.7.2.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.7.1 变更摘要
+## 1.6.0 – 1.7.2 变更摘要
 
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
@@ -99,13 +99,16 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.1.zip' -Algorithm SHA256
   **3000 行/秒**，而界面每条日志都整块重绘 400 行、UI 泵一次抽干队列，
   Tk 主线程被日志占满。现在：逐文件日志改为每 50 个文件一条进度
   （明细只进运行日志）、日志刷新合并为一个泵周期一次、UI 泵单次限 200 项/15ms。
+- **1.7.2**：继续修卡死 —— llama-server 日志从最大 verbose 降到 `-lv 4`
+  （单次 25 MB / 28 万行 → 约 16 KB），GPU 上卡判定仍可用；条目级进度
+  （峰值 470 条/秒）改为只写运行日志，界面只保留每 50 个文件一条进度。
 - 发布清单改为**真校验**：术语基表按实际分类求和、新增"tools 副本 == 随包"
   与"dist 只保留当前版本 zip"检查；CI 用 `--check` 做漂移门禁。
 
 ## 开发与测试
 
 ```powershell
-# 116 项回归测试
+# 119 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性

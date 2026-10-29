@@ -40,7 +40,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.7.1",
+    "version": "1.7.2",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -1599,7 +1599,10 @@ class LlamaServer(object):
                 "--n-gpu-layers", str(self.gpu_layers),
                 "--temp", "0.1"]
         if self.variant in GPU_VARIANTS:
-            args.append("--verbose")
+            # 只要 GPU 识别所需的 I 级行（using device / offloaded N/M layers）。
+            # 原来的 --verbose 把 verbosity 开到最大：实测一次运行 25 MB / 28 万行，
+            # 请求级 debug 还持续写盘，拖慢整机。
+            args += ["-lv", "4"]
         log_file = os.path.join(_LOGS_DIR, "server_%d.log" % int(time.time()))
         self.log_file = log_file
         self._log_fp = open(log_file, "wb")
@@ -4568,8 +4571,11 @@ class AiTranslateTab(object):
                     out_dir=out_dir,
                     log=lambda m, tag="info": self.ui_call(self.log, m, tag),
                     detail=lambda m, tag="info": self.api.log_detail(m, tag),
-                    progress=lambda d: self.ui_call(
-                        self.log, "  进度：[%d/%d] %s（%d/%d 条，累计 %d 段）"
+                    # 条目级进度只写运行日志：实测 6122 个文件时这一路
+                    # 会达到 470 条/秒并全部进界面日志，是 1.7.1 后仍卡死的
+                    # 主因。界面只保留每 50 个文件一条的文件进度。
+                    progress=lambda d: self.api.log_detail(
+                        "  进度：[%d/%d] %s（%d/%d 条，累计 %d 段）"
                         % (d.get("file_idx", 0), d.get("files", 0),
                            d.get("file", ""), d.get("ids", 0),
                            d.get("total_ids", 0), d.get("reqs", 0))),

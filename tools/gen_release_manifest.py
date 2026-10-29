@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.7.1.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.7.2.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.7.1.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.7.2.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.7.1"
+EXPECTED_PLUGIN_VERSION = "1.7.2"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
