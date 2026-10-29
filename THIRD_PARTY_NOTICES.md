@@ -17,7 +17,7 @@
   | `xRayXmlParser/entityDefinition.py` | 原样收录 |
   | `xRayXmlParser/xmlFileGenerator.py` | 原样收录 |
   | `xRayXmlParser/xmlxReader.py` | 已修改：改用标准库 XML 解析、加入编码候选链与健壮性修复 |
-  | `xRayXmlParser/xRayTextAnalyzer.py` | 已修改：正则转义修正、俄文字母表修正、文本字段兼容处理 |
+  | `xRayXmlParser/xRayTextAnalyzer.py` | 已修改：正则转义修正、俄文字母表修正、文本字段兼容处理；2026-10-30 修复 cfgxml 标签正则的灾难性回溯（`ui_faction_patches.xml` 单文件 58 秒 → 2 毫秒） |
 
 - `plugins/ai_translate.py` 的翻译流水线（文本 XML / cfgxml / ltx / script 的
   "提取—翻译—回填"思路）参考了上游 `xRayTrans.py`，但为独立实现：本地

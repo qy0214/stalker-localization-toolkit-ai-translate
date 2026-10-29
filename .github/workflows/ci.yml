@@ -23,7 +23,7 @@ jobs:
 
       # 插件是纯标准库实现，测试不需要第三方依赖；
       # 若将来测试引入依赖，请显式写在这里（不要让"没装"变成"没检查"）。
-      - name: Regression suite (119)
+      - name: Regression suite (130)
         run: python tests/test_ai_translate_fixes.py
 
       - name: Share package hygiene / cold start / read-only fallback

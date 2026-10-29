@@ -4,7 +4,8 @@
    https://github.com/wzyddg/stalker_auto-trans-tool_remake
    - ai_translate_assets/xray_pkg.zip 内的 X-Ray 解析器：
      3 个文件原样收录，xmlxReader.py 与 xRayTextAnalyzer.py 经本地修改
-     （标准库 XML 解析、编码候选链、正则与健壮性修复）。
+     （标准库 XML 解析、编码候选链、正则与健壮性修复；2026-10-30 修复
+     cfgxml 标签正则的灾难性回溯：单个 2.6 KB 文件曾需 58 秒）。
    - 翻译流程（提取—翻译—回填）参考其 xRayTrans.py；本插件为独立实现。
    - 上游仓库未声明开源许可证（2026-10-29 检查 license: null），
      版权归原作者；此处保留来源与作者信息，不主张额外授权。

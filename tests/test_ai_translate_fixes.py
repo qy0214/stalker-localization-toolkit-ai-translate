@@ -17,9 +17,11 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1507,6 +1509,114 @@ def t31_progress_channel():
 
 
 # ----------------------------------------------------------------------
+# T32 cfgxml 正则灾难性回溯回归
+# ----------------------------------------------------------------------
+def t32_cfgxml_regex_dos():
+    print()
+    print("--- T32 cfgxml 正则回溯 ---")
+    p = ait._load_vendor()
+    bomb = os.path.join(TMP, "texture_bomb.xml")
+    # 关键形态：大量自闭合 <texture .../>，没有 </text>。
+    # 旧正则 (?:\s*|[^/>])*? 会为每个 <texture 前缀扫到文末，指数回溯
+    # （实测同形态 ui_faction_patches.xml 58 秒，持有 GIL 冻结整个界面）。
+    body = ['<?xml version="1.0" encoding="utf-8"?>', "<window>"]
+    for i in range(800):
+        body.append('<texture name="t%d" file="ui\\\\a/b%d.dds" '
+                    'x="1" y="2" width="3" height="4"/>' % (i, i))
+    body.append('<title><text font="letterica18">你好，潜行者</text></title>')
+    body.append("</window>")
+    with io.open(bomb, "w", encoding="utf-8") as f:
+        f.write("\n".join(body))
+    t0 = time.time()
+    whole, cands, enc = p.parse_xray_cfgxml_xml(bomb, ["utf-8"])
+    elapsed = time.time() - t0
+    check("T32-1 800 个 <texture/> 的 cfg 解析 < 2 秒（旧版 58 秒）",
+          elapsed < 2.0, "%.3fs" % elapsed)
+    check("T32-2 真正的 <text> 仍然提取到",
+          any("你好" in c for c in cands), repr(sorted(cands)[:3]))
+    # 自闭合 <text .../> 不应当作"开始标签"去吞后面的 </title>
+    selfclose = os.path.join(TMP, "selfclose.xml")
+    with io.open(selfclose, "w", encoding="utf-8") as f:
+        f.write("<window><title>"
+                '<text font="letterica16" r="255"/>\n</title></window>')
+    _, cands2, _ = p.parse_xray_cfgxml_xml(selfclose, ["utf-8"])
+    check("T32-3 自闭合 <text/> 不产生假候选",
+          not [c for c in cands2 if c.strip()], repr(sorted(cands2)))
+
+
+# ----------------------------------------------------------------------
+# T33 引擎进程生命周期（Job Object / 孤儿清理）
+# ----------------------------------------------------------------------
+def t33_process_lifecycle():
+    print()
+    print("--- T33 引擎进程生命周期 ---")
+    if os.name != "nt":
+        check("T33-0 非 Windows：跳过 Job Object 实测", True)
+        return
+    job = ait._create_kill_job()
+    check("T33-1 创建 kill-on-close 作业对象", bool(job))
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        assigned = ait._assign_pid_to_job(job, child.pid)
+        t0 = time.time()
+        ait._close_handle(job)       # 关闭句柄 = 模拟宿主进程消失
+        try:
+            child.wait(timeout=10)
+            gone = True
+        except subprocess.TimeoutExpired:
+            gone = False
+        check("T33-2 关闭作业句柄后引擎被内核连带终止",
+              assigned and gone, "assigned=%s gone=%s %.2fs"
+              % (assigned, gone, time.time() - t0))
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()
+
+    paths = ait._server_exe_paths()
+    check("T33-3 只认本插件 bin 下的 llama-server 路径",
+          any(p.endswith(os.path.join("bin", "cuda", "llama-server.exe"))
+              for p in paths)
+          and all(p.endswith("llama-server.exe") for p in paths),
+          "n=%d" % len(paths))
+
+    # 清理绝不能不打招呼就杀"别人的"引擎：路径不在白名单就一动不动
+    other = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        killed = ait._kill_orphan_servers(
+            {"exe_paths": {"cuda": os.path.join(TMP, "other",
+                                                "llama-server.exe")}})
+        check("T33-4 白名单外的 llama-server 不会被误杀",
+              not killed and other.poll() is None, "killed=%r" % (killed,))
+    finally:
+        if other.poll() is None:
+            other.kill()
+            other.wait()
+
+
+# ----------------------------------------------------------------------
+# T34 引擎启动参数与慢解析取证
+# ----------------------------------------------------------------------
+def t34_engine_mem_and_slow_log():
+    print()
+    print("--- T34 引擎参数 / 慢解析取证 ---")
+    import inspect
+    src = inspect.getsource(ait.LlamaServer._start_once)
+    check("T34-1 单 slot 跑翻译（--parallel 1，少一份槽位开销）",
+          '"--parallel"' in src and '"1"' in src)
+    check("T34-2 子进程已接入 kill-on-close 作业",
+          "_assign_server_to_kill_job(self.proc)" in src)
+    src_tab = inspect.getsource(ait.AiTranslateTab.__init__)
+    check("T34-3 启动时扫描遗留引擎",
+          "_sweep_orphan_servers()" in src_tab)
+    src_parse = inspect.getsource(ait.TranslationJob._parse)
+    check("T34-4 单文件解析 >2 秒写详细日志、>10 秒告警",
+          "elapsed >= 2.0" in src_parse and "elapsed >= 10.0" in src_parse)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1516,7 +1626,9 @@ def main():
                t21_self_check, t22_sources, t23_gpu_detect,
                t24_cuda13_gate, t25_cuda13_task, t26_cuda13_fallback,
                t27_log_batch, t28_pump_budget, t29_log_volume,
-               t30_server_log_level, t31_progress_channel):
+               t30_server_log_level, t31_progress_channel,
+               t32_cfgxml_regex_dos, t33_process_lifecycle,
+               t34_engine_mem_and_slow_log):
         try:
             fn()
         except Exception as e:

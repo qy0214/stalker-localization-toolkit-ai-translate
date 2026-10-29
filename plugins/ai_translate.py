@@ -40,7 +40,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.7.2",
+    "version": "1.7.3",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -105,6 +105,320 @@ for _d in (_DATA_ROOT, _MODELS_DIR, _BIN_DIR, _LOGS_DIR, _DOWNLOAD_DIR):
 def _bin_dirs():
     """查找运行库时同时看随包目录与用户数据目录。"""
     return [_SHIPPED_BIN_DIR, _BIN_DIR]
+
+
+# ══════════════════════════════════════════════════════════════════
+# Windows 进程生命周期：Job Object + 遗留引擎清理
+#
+# 背景（2026-10-30 实测）：工具集被"任务管理器结束任务"后，llama-server
+# 不会收到任何通知（atexit 不执行），于是留在后台继续占着 ~3 GB 显存和
+# 数 GB 内存。连续几次强杀后 6 GB 显卡被 4 个残留引擎塞满，驱动把模型
+# 溢到内存，下一次翻译连窗口一起卡死 —— 用户看到的就是"又卡死了"。
+#
+# 这里做两件事：
+#   1. 启动时扫一遍 llama-server.exe：只认本插件自己的 exe 路径，且父
+#      进程已经不在的（真孤儿），杀掉并回收显存；
+#   2. 新拉起的引擎放进 kill-on-close 的 Job Object：宿主进程无论怎么
+#      死（含 TerminateProcess），内核都会连带终止它，不再产生新孤儿。
+# ══════════════════════════════════════════════════════════════════
+
+_WIN = False          # False=尚未初始化；None=初始化失败；dict=已就绪
+_KILL_JOB = None      # kill-on-close Job 句柄，保持到进程结束
+_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+_JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+_WAIT_TIMEOUT = 0x00000102
+_PROCESS_TERMINATE = 0x0001
+_PROCESS_SET_QUOTA = 0x0100
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_SYNCHRONIZE = 0x00100000
+_TH32CS_SNAPPROCESS = 0x00000002
+
+
+def _win():
+    """Windows 进程/作业对象 API 的轻量封装；非 Windows 返回 None。"""
+    global _WIN
+    if os.name != "nt":
+        return None
+    if _WIN not in (False, None):
+        return _WIN
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class BASIC_LIMIT(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", wintypes.LARGE_INTEGER),
+                ("PerJobUserTimeLimit", wintypes.LARGE_INTEGER),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class EXTENDED_LIMIT(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", BASIC_LIMIT),
+                ("IoInfo", IO_COUNTERS),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", wintypes.WCHAR * 260),
+            ]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD,
+                                                 wintypes.DWORD]
+        k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.Process32FirstW.argtypes = [wintypes.HANDLE,
+                                        ctypes.POINTER(PROCESSENTRY32W)]
+        k32.Process32FirstW.restype = wintypes.BOOL
+        k32.Process32NextW.argtypes = [wintypes.HANDLE,
+                                       ctypes.POINTER(PROCESSENTRY32W)]
+        k32.Process32NextW.restype = wintypes.BOOL
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL,
+                                    wintypes.DWORD]
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD)]
+        k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        k32.WaitForSingleObject.restype = wintypes.DWORD
+        k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        k32.TerminateProcess.restype = wintypes.BOOL
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle.restype = wintypes.BOOL
+        k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.SetInformationJobObject.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+        k32.SetInformationJobObject.restype = wintypes.BOOL
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE,
+                                                 wintypes.HANDLE]
+        k32.AssignProcessToJobObject.restype = wintypes.BOOL
+
+        _WIN = {
+            "ctypes": ctypes,
+            "wintypes": wintypes,
+            "k32": k32,
+            "EXTENDED_LIMIT": EXTENDED_LIMIT,
+            "PROCESSENTRY32W": PROCESSENTRY32W,
+            "INVALID_HANDLE": ctypes.c_void_p(-1).value,
+        }
+    except Exception:
+        _WIN = None
+    return _WIN
+
+
+def _norm_path(p):
+    try:
+        return os.path.normcase(os.path.abspath(str(p)))
+    except Exception:
+        return ""
+
+
+def _server_exe_paths(cfg=None):
+    """本插件可能使用的 llama-server.exe 全路径集合。
+
+    只认这些**精确路径**，避免误杀用户自己跑的 llama.cpp 或别的工具集。
+    布局：<随包或用户数据>/bin/<变体>/llama-server.exe；外加手工指定的
+    exe_paths（用户可选任意本地运行库）。
+    """
+    paths = set()
+    for base in _bin_dirs():
+        for variant in ("cpu", "cuda", "cuda13", "vulkan"):
+            paths.add(_norm_path(os.path.join(base, variant,
+                                              "llama-server.exe")))
+        paths.add(_norm_path(os.path.join(base, "llama-server.exe")))
+    for p in ((cfg or {}).get("exe_paths") or {}).values():
+        if p:
+            paths.add(_norm_path(p))
+    paths.discard("")
+    return paths
+
+
+def _win_process_image(pid):
+    """进程完整 exe 路径；取不到返回空串。"""
+    w = _win()
+    if not w:
+        return ""
+    k32, ctypes, wintypes = w["k32"], w["ctypes"], w["wintypes"]
+    h = k32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(buf))
+        if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return buf.value
+    except Exception:
+        pass
+    finally:
+        k32.CloseHandle(h)
+    return ""
+
+
+def _win_pid_alive(pid):
+    """父进程是否还活着（只用于判孤儿；PID 复用会偏保守地算"活着"）。"""
+    w = _win()
+    if not w:
+        return False
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    k32 = w["k32"]
+    h = k32.OpenProcess(_SYNCHRONIZE, False, pid)
+    if not h:
+        return False
+    try:
+        return k32.WaitForSingleObject(h, 0) == _WAIT_TIMEOUT
+    finally:
+        k32.CloseHandle(h)
+
+
+def _win_terminate_pid(pid):
+    w = _win()
+    if not w:
+        return False
+    k32 = w["k32"]
+    h = k32.OpenProcess(_PROCESS_TERMINATE, False, int(pid))
+    if not h:
+        return False
+    try:
+        return bool(k32.TerminateProcess(h, 1))
+    finally:
+        k32.CloseHandle(h)
+
+
+def _win_llama_servers():
+    """[(pid, ppid, exe_path)]，仅 llama-server.exe。"""
+    w = _win()
+    if not w:
+        return []
+    k32, ctypes, wintypes = w["k32"], w["ctypes"], w["wintypes"]
+    snap = k32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == w["INVALID_HANDLE"]:
+        return []
+    out = []
+    try:
+        entry = w["PROCESSENTRY32W"]()
+        entry.dwSize = ctypes.sizeof(entry)
+        ok = k32.Process32FirstW(snap, ctypes.byref(entry))
+        while ok:
+            name = (entry.szExeFile or "").lower()
+            if name == "llama-server.exe":
+                pid = int(entry.th32ProcessID)
+                out.append((pid, int(entry.th32ParentProcessID),
+                            _win_process_image(pid)))
+            entry.dwSize = ctypes.sizeof(entry)
+            ok = k32.Process32NextW(snap, ctypes.byref(entry))
+    finally:
+        k32.CloseHandle(snap)
+    return out
+
+
+def _kill_orphan_servers(cfg=None):
+    """杀掉**本插件路径下**且父进程已退出的 llama-server，返回 PID 列表。"""
+    if os.name != "nt":
+        return []
+    allowed = _server_exe_paths(cfg)
+    killed = []
+    for pid, ppid, exe in _win_llama_servers():
+        if not exe or _norm_path(exe) not in allowed:
+            continue
+        if _win_pid_alive(ppid):
+            continue                      # 还归某个活着的宿主，别动
+        if _win_terminate_pid(pid):
+            killed.append(pid)
+    return killed
+
+
+def _create_kill_job():
+    """创建 kill-on-close 作业对象；失败返回 None（不影响翻译）。"""
+    w = _win()
+    if not w:
+        return None
+    k32, ctypes = w["k32"], w["ctypes"]
+    job = k32.CreateJobObjectW(None, None)
+    if not job or job == w["INVALID_HANDLE"]:
+        return None
+    info = w["EXTENDED_LIMIT"]()
+    info.BasicLimitInformation.LimitFlags = \
+        _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not k32.SetInformationJobObject(
+            job, _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+            ctypes.byref(info), ctypes.sizeof(info)):
+        k32.CloseHandle(job)
+        return None
+    return job
+
+
+def _assign_pid_to_job(job, pid):
+    w = _win()
+    if not w or not job:
+        return False
+    k32 = w["k32"]
+    h = k32.OpenProcess(_PROCESS_SET_QUOTA | _PROCESS_TERMINATE,
+                        False, int(pid))
+    if not h:
+        return False
+    try:
+        return bool(k32.AssignProcessToJobObject(job, h))
+    finally:
+        k32.CloseHandle(h)
+
+
+def _close_handle(h):
+    w = _win()
+    if w and h:
+        w["k32"].CloseHandle(h)
+
+
+def _kill_job():
+    """进程级共享的 Job（保持句柄到退出；宿主一死内核连带收掉引擎）。"""
+    global _KILL_JOB
+    if os.name != "nt":
+        return None
+    if _KILL_JOB is None:
+        _KILL_JOB = _create_kill_job()
+    return _KILL_JOB
+
+
+def _assign_server_to_kill_job(proc):
+    if proc is None:
+        return False
+    return _assign_pid_to_job(_kill_job(), proc.pid)
+
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) STALKER-Localization-Toolkit/ai-translate"
 
@@ -1597,6 +1911,9 @@ class LlamaServer(object):
                 "--port", str(self.port),
                 "--ctx-size", str(self.ctx_size),
                 "--n-gpu-layers", str(self.gpu_layers),
+                # 翻译请求是串行的：1 个槽位足够。新版 llama-server 的
+                # auto 会给 4 个槽位（每槽一套 16K 上下文），白占显存/内存。
+                "--parallel", "1",
                 "--temp", "0.1"]
         if self.variant in GPU_VARIANTS:
             # 只要 GPU 识别所需的 I 级行（using device / offloaded N/M layers）。
@@ -1620,6 +1937,11 @@ class LlamaServer(object):
         self.proc = subprocess.Popen(
             args, cwd=os.path.dirname(self.exe), stdout=self._log_fp,
             stderr=subprocess.STDOUT, creationflags=flags)
+        # 把引擎放进 kill-on-close 作业：工具集被任务管理器强杀时，
+        # 内核会连带终止它，不再留下占着显存的孤儿（见 _win 注释）。
+        if os.name == "nt" and not _assign_server_to_kill_job(self.proc):
+            self.log("提示：未能把引擎纳入系统作业托管；若工具集被强杀，"
+                     "引擎可能残留（下次启动会自动清理）", "dim")
         if not self._atexit:
             atexit.register(self.stop)
             self._atexit = True
@@ -2265,11 +2587,23 @@ class TranslationJob(object):
 
         解析器会逐文件打印"用了哪个编码解码"—— 那正是编码猜错时唯一的
         线索，而 GUI 子系统下 stdout 为 None，不接过来就等于没有。
+
+        同时记录单文件解析耗时：vendor 的 cfgxml 正则曾在一类 <texture>
+        文件上灾难性回溯，一卡就是几十秒且持有 GIL（整个窗口无响应）。
+        修好后仍保留这条"慢文件"证据，下次换别的语料再遇到就能直接定位。
         """
+        t0 = time.time()
         with capture_stdout() as cap:
             result = fn(*args)
+        elapsed = time.time() - t0
         for line in cap.lines():
             self.detail("  " + line)
+        if elapsed >= 2.0:
+            name = os.path.basename(str(args[0])) if args else "?"
+            self.detail("  解析耗时 %.1f 秒：%s" % (elapsed, name))
+            if elapsed >= 10.0:
+                self.log("解析耗时异常（%.0f 秒）：%s；如再次出现请反馈该文件"
+                         % (elapsed, name), "warn")
         return result
 
     def _warn_mojibake(self, rel, samples):
@@ -3212,6 +3546,27 @@ class AiTranslateTab(object):
         self.refresh_gloss_view()
         self.refresh_local_status()
         self.on_hw_check(silent=True)
+        self._sweep_orphan_servers()
+
+    def _sweep_orphan_servers(self):
+        """后台清理上次异常退出遗留的引擎（只认本插件 exe + 父进程已死）。
+
+        不阻塞启动：Toolhelp32 枚举通常只要几毫秒；即使失败也绝不影响
+        正常流程。清到东西才写一行日志，避免每次启动都刷屏。
+        """
+        def work():
+            try:
+                killed = _kill_orphan_servers(self.cfg)
+            except Exception:
+                return
+            if killed:
+                self.ui_call(
+                    self.log,
+                    "已清理 %d 个上次异常退出遗留的引擎进程（%s），"
+                    "显存/内存已回收"
+                    % (len(killed), ", ".join("PID %d" % p for p in killed)),
+                    "ok")
+        threading.Thread(target=work, daemon=True).start()
 
     def on_hw_check(self, silent=False):
         """① 硬件检测：后台执行，给出一句话推荐并预选后端/档位。"""
