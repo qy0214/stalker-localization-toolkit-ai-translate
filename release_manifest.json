@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-30T02:12:48+08:00",
+  "generated_at": "2026-10-30T02:15:03+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "76e1906",
+    "commit": "7fb8901",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
@@ -24,16 +24,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 244059,
-      "sha256": "3d31b84a97a7ec45fddfc536e8e3313dae9ee4fca3cacedead19985187dfc5c2",
+      "size": 238378,
+      "sha256": "7380500e862406afc220a6dc4f7379df6b5ed6907119fa7f968c37b5fffb5bb5",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
       "path": "dist\\ai_translate_plugin_v1.7.4.zip",
       "exists": true,
-      "size": 290108,
-      "sha256": "24f202054410ae3a92ec3da0389de57fbc24afc5f3f38bd673a5f9ac71a0f938",
+      "size": 289751,
+      "sha256": "3fc74e39ef7472892ad209e9c6130b8bb6ac3461304434615112f33e48e1c871",
       "note": "当前发布包"
     },
     {
@@ -73,7 +73,7 @@
       "path": "使用说明.txt",
       "exists": true,
       "size": 20678,
-      "sha256": "4e740f0404d71aa328fbd11bf8da32897bb6f163feafaeedf41a4966e38c0445",
+      "sha256": "b615cbdeedc7fe8e8be7aa8fcb2742256990dbbfa18ec47609f9791642db61ed",
       "note": "含发布包 SHA-256"
     },
     {
@@ -103,7 +103,7 @@
   ],
   "zip": {
     "path": "dist\\ai_translate_plugin_v1.7.4.zip",
-    "sha256": "24f202054410ae3a92ec3da0389de57fbc24afc5f3f38bd673a5f9ac71a0f938",
+    "sha256": "3fc74e39ef7472892ad209e9c6130b8bb6ac3461304434615112f33e48e1c871",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -248,7 +248,7 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "24f202054410ae3a…"
+      "detail": "3fc74e39ef747289…"
     },
     {
       "check": "使用说明含插件版本",
@@ -320,6 +320,6 @@
   },
   "tracked": {
     "files": 29,
-    "bytes": 17972767
+    "bytes": 17956952
   }
 }
