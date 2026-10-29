@@ -35,7 +35,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.5.1",
+    "version": "1.6.1",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -77,8 +77,17 @@ _MODELS_DIR = os.path.join(_DATA_ROOT, "models")
 _BIN_DIR = os.path.join(_DATA_ROOT, "bin")
 _LOGS_DIR = os.path.join(_DATA_ROOT, "logs")
 _CONFIG = os.path.join(_DATA_ROOT, "config.json")
-_GLOSS_USER = os.path.join(_DATA_ROOT, "glossary_user.json")
 _DOWNLOAD_DIR = os.path.join(_DATA_ROOT, "downloads")
+
+# 术语分两层，避免"升级覆盖 plugins/ 把用户自定义术语一起冲掉"：
+#   builtin（随包，只读）      ai_translate_assets/glossary_builtin.json
+#   用户覆盖层（可变）          <_DATA_ROOT>/glossary_user.json
+# 1.6.0 之前两者是同一个文件（assets/glossary_user.json），升级即丢用户词条；
+# 这里保留对旧文件名/旧扁平格式的读取兼容，见 _read_user_layer()。
+_GLOSS_BUILTIN = os.path.join(_ASSETS, "glossary_builtin.json")
+_GLOSS_BUILTIN_LEGACY = os.path.join(_ASSETS, "glossary_user.json")
+_GLOSS_USER = os.path.join(_DATA_ROOT, "glossary_user.json")
+_GLOSS_LAYER_FORMAT = "ai-translate-glossary-user/1"
 
 for _d in (_DATA_ROOT, _MODELS_DIR, _BIN_DIR, _LOGS_DIR, _DOWNLOAD_DIR):
     try:
@@ -235,6 +244,7 @@ def _gh_sources(url):
     return sources
 
 _CUDART_MARKS = ("cudart64", "cublas", "nvrtc")
+_CUDART_MARK = ".cudart_installed.json"
 
 def _model_sources(repo_ms, repo_hf, filename):
     return [
@@ -764,35 +774,92 @@ def load_config():
 _JSON_WRITE_LOCK = threading.Lock()
 
 
+_LAST_CONFIG_ERROR = ""
+
+
 def save_config(cfg):
-    """原子写配置（tmp → os.replace），并发调用串行化。"""
+    """原子写配置（tmp → os.replace），并发调用串行化。返回是否写成功。
+
+    写失败**不再静默**：调用方据此提示用户（只读目录/磁盘满时，设置只在内存
+    生效）。并发修改 dict 可能让 json.dumps 抛 RuntimeError，同样要捕获。
+    """
+    global _LAST_CONFIG_ERROR
     try:
         payload = json.dumps(cfg, ensure_ascii=False, indent=1)
-    except (TypeError, ValueError):
-        return
+    except (TypeError, ValueError, RuntimeError) as e:
+        _LAST_CONFIG_ERROR = "%s: %s" % (type(e).__name__, e)
+        return False
     with _JSON_WRITE_LOCK:
         try:
             tmp = _CONFIG + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 f.write(payload)
             os.replace(tmp, _CONFIG)
+            _LAST_CONFIG_ERROR = ""
+            return True
+        except Exception as e:
+            _LAST_CONFIG_ERROR = "%s: %s" % (type(e).__name__, e)
+            return False
+
+
+
+def load_builtin_glossary():
+    """随包术语（只读）。优先 glossary_builtin.json，兼容旧版文件名。"""
+    for path in (_GLOSS_BUILTIN, _GLOSS_BUILTIN_LEGACY):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return flatten_glossary(json.load(f))
         except Exception:
-            pass
-
-
-
-def load_user_glossary():
-    try:
-        with open(_GLOSS_USER, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return flatten_glossary(data)
-    except Exception:
-        pass
+            continue
     return {}
 
 
-def save_user_glossary(data):
-    payload = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True)
+def _read_user_layer(builtin=None):
+    """读用户覆盖层，返回 (set_map, deleted, clear_builtin)。
+
+    兼容 1.6.0 之前的扁平格式：那份文件其实是"整张术语库的快照"，若直接当
+    覆盖层会把 builtin 的后续更新全部遮蔽。这里按**与 builtin 的差异**提取，
+    只保留用户真正改过/新增的条目。
+    """
+    try:
+        with open(_GLOSS_USER, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}, set(), False
+    if isinstance(data, dict) and data.get("_format") == _GLOSS_LAYER_FORMAT:
+        raw_set = data.get("set") if isinstance(data.get("set"), dict) else {}
+        set_map = {str(k): str(v) for k, v in raw_set.items()
+                   if str(k).strip() and not str(k).startswith("_")}
+        try:
+            deleted = {str(k) for k in (data.get("del") or [])
+                       if str(k).strip()}
+        except TypeError:
+            deleted = set()
+        return set_map, deleted, bool(data.get("clear_builtin"))
+    flat = flatten_glossary(data) if isinstance(data, dict) else {}
+    base = load_builtin_glossary() if builtin is None else builtin
+    return {k: v for k, v in flat.items() if base.get(k) != v}, set(), False
+
+
+def load_glossary_layers():
+    """返回 (合并后的术语表, 用户 set 层, 用户删除集, 是否清空 builtin)。"""
+    builtin = load_builtin_glossary()
+    set_map, deleted, clear = _read_user_layer(builtin)
+    merged = {} if clear else dict(builtin)
+    for key in deleted:
+        merged.pop(key, None)
+    merged.update(set_map)
+    return merged, set_map, deleted, clear
+
+
+def save_user_glossary(set_map, deleted=None, clear_builtin=False):
+    """只写用户覆盖层；builtin 永远是随包只读文件。"""
+    payload = json.dumps({
+        "_format": _GLOSS_LAYER_FORMAT,
+        "clear_builtin": bool(clear_builtin),
+        "set": dict(set_map or {}),
+        "del": sorted(deleted or ()),
+    }, ensure_ascii=False, indent=1, sort_keys=True)
     with _JSON_WRITE_LOCK:
         tmp = _GLOSS_USER + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
@@ -992,14 +1059,18 @@ class OutputTruncated(Exception):
 
 
 def download_one(sources, target, log, progress=None, cancel_event=None,
-                 retries_per_source=3):
+                 retries_per_source=3, verify=None):
     """按 sources 顺序尝试；.part 断点续传；全部源失败才抛异常。
 
     progress(done, total, speed_mbps, eta_sec, src_name)
+    verify(part_path) -> digest：**每个源下载完成后**立即校验，失败即删文件并
+    换下一个源（文档一直这么写，1.6.0 之前实际只是删文件让用户手动重试）。
+    返回校验得到的 digest；未提供 verify 时返回 True。
     """
     part = target + ".part"
     total = None
     last_err = None
+    last_invalid = None
 
     for name, url in sources:
         for attempt in range(1, retries_per_source + 1):
@@ -1051,10 +1122,19 @@ def download_one(sources, target, log, progress=None, cancel_event=None,
                 final_size = os.path.getsize(part)
                 if total and final_size != total:
                     raise IOError("下载不完整：%d / %d 字节" % (final_size, total))
+                digest = None
+                if verify is not None:
+                    digest = verify(part)
                 os.replace(part, target)
-                return True
+                return digest if verify is not None else True
             except DownloadCancelled:
                 raise
+            except InvalidArtifact as e:
+                # verify 内部已删除坏文件；本源的断点不再有意义，换下一个源
+                last_invalid = "%s（第 %d 次）：校验未通过：%s" % (
+                    name, attempt, e)
+                log("  下载产物校验未通过（%s），已删除，切换下一个源…" % e)
+                break
             except Exception as e:
                 last_err = "%s（第 %d 次）：%s" % (name, attempt, e)
                 log("  下载中断，%s" % last_err)
@@ -1065,28 +1145,24 @@ def download_one(sources, target, log, progress=None, cancel_event=None,
                     time.sleep(min(2 * attempt, 5))
         log("  切换下一个下载源（已保留断点 %s）…" % _fmt_size(
             os.path.getsize(part) if os.path.isfile(part) else 0))
+    if last_invalid:
+        raise InvalidArtifact("所有下载源均未通过校验；最后错误：%s"
+                              % last_invalid)
     raise IOError("所有下载源均失败；最后错误：%s" % last_err)
 
 
-def extract_zip(zip_path, dest_dir, marker, log):
-    """解压运行库 zip，返回 marker 文件（llama-server.exe）的完整路径。"""
-    if os.path.isdir(dest_dir):
-        for root, _dirs, files in os.walk(dest_dir):
-            if marker in files:
-                return os.path.join(root, marker)
+def _extract_zip_into(zip_path, dest_dir):
+    """解压到临时目录，再逐项移入 dest_dir（同名项先删）。
+
+    为什么不在 dest_dir 上直接 extractall：中断会留下"半套文件"，而按文件名
+    前缀做的存在性检查会把它当成已安装（CUDA 运行时就是这么坏掉的）。
+    """
     os.makedirs(dest_dir, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="ai_translate_zip_", dir=dest_dir)
     try:
         with zipfile.ZipFile(zip_path) as z:
             z.extractall(tmp)
-        marker_path = None
-        for root, _dirs, files in os.walk(tmp):
-            if marker in files:
-                marker_path = os.path.join(root, marker)
-                break
-        if not marker_path:
-            raise IOError("压缩包中找不到 %s" % marker)
-        for item in os.listdir(tmp):
+        for item in sorted(os.listdir(tmp)):
             src = os.path.join(tmp, item)
             dst = os.path.join(dest_dir, item)
             if os.path.exists(dst):
@@ -1095,13 +1171,26 @@ def extract_zip(zip_path, dest_dir, marker, log):
                 else:
                     os.remove(dst)
             shutil.move(src, dst)
-        for root, _dirs, files in os.walk(dest_dir):
-            if marker in files:
-                marker_path = os.path.join(root, marker)
-        log("  解压完成：%s" % marker_path)
-        return marker_path
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def extract_zip(zip_path, dest_dir, marker, log):
+    """解压运行库 zip，返回 marker 文件（llama-server.exe）的完整路径。"""
+    if os.path.isdir(dest_dir):
+        for root, _dirs, files in os.walk(dest_dir):
+            if marker in files:
+                return os.path.join(root, marker)
+    _extract_zip_into(zip_path, dest_dir)
+    marker_path = None
+    for root, _dirs, files in os.walk(dest_dir):
+        if marker in files:
+            marker_path = os.path.join(root, marker)
+            break
+    if not marker_path:
+        raise IOError("压缩包中找不到 %s" % marker)
+    log("  解压完成：%s" % marker_path)
+    return marker_path
 
 
 
@@ -1556,17 +1645,38 @@ class LlamaServer(object):
         **不阻断启动**（只告警）：避免误伤行为特殊但可用的模型；用户看到
         告警后可以自行换模型或改用其他后端。
         """
+        tokenizer_warn = (
+            "模型无法正常收尾（输出撞满上限仍未结束）：该 GGUF 的 tokenizer "
+            "元数据可能不完整（缺 EOS/EOG 或对话模板），直接翻译会让每条"
+            "文本都超时")
+
+        def probe(max_tokens, timeout):
+            return self.translate("Hello.", "eng", "chs",
+                                  timeout_sec=timeout, max_tokens=max_tokens,
+                                  use_extra=False)
+
         try:
-            out = self.translate("Hello.", "eng", "chs",
-                                 timeout_sec=120, max_tokens=16,
-                                 use_extra=False)
+            out = probe(16, 120)
         except OutputTruncated:
-            self.health_warn = (
-                "模型无法正常收尾（输出撞满 16 token 上限仍未结束）：该 GGUF "
-                "的 tokenizer 元数据可能不完整（缺 EOS/EOG 或对话模板），"
-                "直接翻译会让每条文本都超时")
-        except Exception as e:
-            self.health_warn = "启动自检请求失败：%s: %s" % (type(e).__name__, e)
+            self.health_warn = tokenizer_warn
+        except Exception:
+            # 16 token 的"空输出"不等于模型坏了：推理型 GGUF 会把预算全花在
+            # reasoning_content 上，content 为空（MiniCPM5-2B 实测如此，
+            # 256 token 时能正常返回"你好。"）。用更大预算复核一次再下结论。
+            try:
+                out = probe(256, 180)
+            except OutputTruncated:
+                self.health_warn = tokenizer_warn
+            except Exception as e:
+                self.health_warn = (
+                    "启动自检请求失败：%s: %s（不影响启动；推理型模型常把小预算"
+                    "耗在思考上而返回空内容，可忽略此告警）"
+                    % (type(e).__name__, e))
+            else:
+                self.health_warn = ""
+                self.log("启动自检通过（16 token 不足，256 token 复核成功）：%r"
+                         % (out[:24] or "(空)"))
+                return True
         else:
             self.health_warn = ""
             self.log("启动自检通过：%r" % (out[:24] or "(空)"))
@@ -1631,6 +1741,44 @@ def safe_chunk_chars(ctx_size):
 
 _SENT_SPLIT = re.compile(r"([。！？!?…\n；;])")
 _CLAUSE_SPLIT = re.compile(r"([，,：:])")
+
+
+_PLACEHOLDER_RE = re.compile(r"\$\$T\d+\$\$")
+
+
+def split_protected(text, max_chars, pattern):
+    """按 split_long_text 切分，但**绝不切断 pattern 的匹配**。
+
+    强制术语模式下原文被换成 $$T1$$ 这类占位符；按字符硬切若切在占位符中间，
+    模型会看到半截标记，回填必然失败并退回旧的切片做法（质量下降且难排查）。
+    做法：先把每个匹配替换成一个私有区单字符，切分后再还原 —— 匹配永远完整。
+    """
+    spans = list(pattern.finditer(text))
+    if not spans or len(spans) > 5000:
+        return split_long_text(text, max_chars)
+    if any(0xE000 <= ord(c) <= 0xF8FF for c in text):
+        # 源文本已含私有区字符时不能用 PUA 做哨兵（会被误还原）；
+        # 退回普通切分：占位符可能被切断，但 _translate_force 会校验并回退，
+        # 不会产出坏译文。
+        return split_long_text(text, max_chars)
+    mapping = {}
+
+    def repl(m):
+        ch = chr(0xE000 + len(mapping))
+        mapping[ch] = m.group(0)
+        return ch
+
+    protected = pattern.sub(repl, text)
+    parts = split_long_text(protected, max_chars)
+    if not mapping:
+        return parts
+    out = []
+    for part in parts:
+        for ch, orig in mapping.items():
+            if ch in part:
+                part = part.replace(ch, orig)
+        out.append(part)
+    return out
 
 
 def split_long_text(text, max_chars):
@@ -2007,6 +2155,13 @@ class TranslationJob(object):
         self.out_dir = out_dir or os.path.join(in_dir, "translated_hy_mt2")
         self._excluded_paths = set()
         self.gloss = GlossaryIndex(self.glossary) if self.glossary else None
+        # 完成账本：记录"每个输入文件的指纹 + 输出大小"，取代"输出文件存在就算
+        # 译完"。旧做法在两种真实场景下会静默漏译：①游戏更新给 XML 加了新条目，
+        # ②ltx/cfg 上次中断留下半截输出 —— 两者都会被"存在即跳过"永久保留。
+        self._ledger_path = None
+        self._ledger = {}
+        self._ledger_present = False
+        self._ledger_saved = 0.0
 
     def _cancelled(self):
         return self.cancel is not None and self.cancel.is_set()
@@ -2209,20 +2364,12 @@ class TranslationJob(object):
         self.trans_chars += len(masked)
         if len(masked) <= self.safe_chars:
             return self.srv.translate(masked, lang, self.tgt)
-        parts = split_long_text(masked, self.safe_chars)
+        parts = split_protected(masked, self.safe_chars, _PLACEHOLDER_RE)
         self.long_chunks += max(0, len(parts) - 1)
         self.log("  长文本 %d 字符 → 自动切为 %d 段翻译（%s 上下文窗）"
                  % (len(masked), len(parts), self.ctx_size))
         return "".join(self._translate_masked(seg, lang) for seg in parts)
 
-
-    def _is_under(self, path, base):
-        try:
-            return os.path.commonpath([os.path.abspath(path),
-                                       os.path.abspath(base)]) == \
-                   os.path.abspath(base)
-        except ValueError:
-            return False
 
     def _fallback_done_dir(self):
         """输入目录不可写（Program Files/只读盘/游戏目录受保护）时，
@@ -2254,12 +2401,109 @@ class TranslationJob(object):
             return False
         return len(ents) == 0
 
+    def _load_ledger(self):
+        try:
+            with open(self._ledger_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_ledger(self):
+        if not self._ledger_path:
+            return
+        try:
+            tmp = self._ledger_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._ledger, f, ensure_ascii=False, sort_keys=True)
+            os.replace(tmp, self._ledger_path)
+            self._ledger_saved = time.time()
+        except OSError:
+            pass
+
+    def _record_done(self, rel, full, out_path):
+        try:
+            ist = os.stat(full)
+            ost = os.stat(out_path)
+        except OSError:
+            return
+        self._ledger[rel.replace("\\", "/")] = {
+            "in_size": ist.st_size,
+            "in_mtime_ns": ist.st_mtime_ns,
+            "out_size": ost.st_size,
+        }
+        # 每文件全量重写是 O(n²)（几千文件时写放大明显）；5 秒节流，
+        # 崩溃最多让最近几秒的文件下次重译（不会漏、不会错）。
+        if time.time() - self._ledger_saved > 5:
+            self._save_ledger()
+
+    def _output_covers_input(self, full, out_path):
+        """输出 XML 是否包含输入的全部 string id（用于旧输出版本迁移）。"""
+        try:
+            in_ents = self._parse(self.p.parse_xray_text_xml, full,
+                                  read_encoding_chain(full))
+            out_ents = self.p.parse_xray_text_xml(
+                out_path, read_encoding_chain(out_path))
+        except Exception:
+            return False
+        if not in_ents:
+            # 输入里没有条目：交给 _run_text_file 走"清理空占位输出"的既有路径
+            return False
+        return {e.id for e in in_ents} <= {e.id for e in out_ents}
+
+    def _should_skip(self, rel, full, out_path, kind):
+        """该文件是否可以跳过（= 输入未变且输出完整）。"""
+        if not os.path.isfile(out_path):
+            return False
+        try:
+            ist = os.stat(full)
+            ost = os.stat(out_path)
+        except OSError:
+            return False
+        ent = self._ledger.get(rel.replace("\\", "/"))
+        if (ent
+                and ent.get("in_size") == ist.st_size
+                and ent.get("in_mtime_ns") == ist.st_mtime_ns
+                and ent.get("out_size") == ost.st_size):
+            return True
+        if self._ledger_present:
+            # 有账本 = 严格模式：没记录过的输出一律重做（可能是中断残留，
+            # 也可能是旧版本产物；重做一次后即入账）。
+            return False
+        # 首次升级到 1.6.0：旧输出没有账本。文本按"输出是否覆盖输入 id"
+        # 判断（能识别缺新条目/半截 XML），其余格式退回 mtime 判断。
+        if kind == "text":
+            ok = self._output_covers_input(full, out_path)
+        else:
+            ok = ost.st_mtime >= ist.st_mtime and ost.st_size > 0
+        if ok:
+            self._record_done(rel, full, out_path)   # 补账，下次走严格模式
+        return ok
+
+    def _write_atomic(self, out_path, writer):
+        """先写 <path>.tmp 再 os.replace：中断不会留下半截"成品"。"""
+        parent = os.path.dirname(out_path) or "."
+        os.makedirs(parent, exist_ok=True)
+        tmp = out_path + ".tmp"
+        try:
+            writer(tmp)
+            os.replace(tmp, out_path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+
     def run(self):
         done_dir = self._resolve_done_dir(self.out_dir)
         self.out_dir = done_dir
         self.done_dir = done_dir
         self._excluded_paths = {os.path.normcase(os.path.abspath(done_dir))}
         os.makedirs(done_dir, exist_ok=True)
+        self._ledger_path = os.path.join(done_dir, ".ai_translate_done.json")
+        self._ledger_present = os.path.isfile(self._ledger_path)
+        self._ledger = self._load_ledger()
 
         reuse = {}
         if self.reuse_dir and os.path.isdir(self.reuse_dir):
@@ -2288,8 +2532,7 @@ class TranslationJob(object):
                         ok = False
                         break
                     out_path = os.path.join(done_dir, rel)
-                    if os.path.exists(out_path) and not \
-                            self._is_stale_empty_output(out_path):
+                    if self._should_skip(rel, full, out_path, "text"):
                         continue
                     try:
                         n_texts = self._run_text_file(
@@ -2300,6 +2543,8 @@ class TranslationJob(object):
                         self.log("文件处理失败，已跳过：%s（%s: %s）"
                                  % (rel, type(e).__name__, e), "err")
                         continue
+                    if n_texts > 0:
+                        self._record_done(rel, full, out_path)
                     if n_texts == 0:
                         skipped_empty += 1
                 else:
@@ -2313,6 +2558,11 @@ class TranslationJob(object):
             else:
                 ok = self._run_recursive(done_dir, reuse)
         finally:
+            # 结束时强制落盘（节流写可能还没写过）。但**空账本不写**：
+            # 用户一开跑就取消时若落一个空账本，下次会进入严格模式，
+            # 把旧版本遗留的输出全部重译一遍（安全但白白耗时）。
+            if self._ledger or self._ledger_present:
+                self._save_ledger()
             removed = self._prune_empty_dirs(done_dir)
             if removed:
                 self.log("已清理 %d 个空目录" % removed)
@@ -2385,8 +2635,7 @@ class TranslationJob(object):
                 self.log("已取消，已完成文件保留在输出目录")
                 return False
             out_path = os.path.join(done_dir, rel)
-            if os.path.exists(out_path) and not (
-                    kind == "text" and self._is_stale_empty_output(out_path)):
+            if self._should_skip(rel, full, out_path, kind):
                 continue
             self.log("[%d/%d] (%s) %s" % (idx, total, kind, rel))
             if kind == "text":
@@ -2402,6 +2651,7 @@ class TranslationJob(object):
                     continue
                 if n_texts > 0:
                     written += 1
+                    self._record_done(rel, full, out_path)
             else:
                 mode = {"cfg": "cfgxml", "ltx": "ltx",
                         "script": "scriptL"}[kind]
@@ -2424,16 +2674,19 @@ class TranslationJob(object):
                     if "chars_all_in" in extract:
                         chars_all |= extract["chars_all_in"]
                 if rep_dict or self.output_anyway:
-                    os.makedirs(os.path.dirname(out_path) or done_dir,
-                                exist_ok=True)
                     if kind in ("cfg", "ltx"):
-                        self.p.generateOutputFileFromString(
-                            out_path, whole_text, needXmlHeader=False,
-                            encoding=enc or "utf-8")
+                        self._write_atomic(
+                            out_path,
+                            lambda p: self.p.generateOutputFileFromString(
+                                p, whole_text, needXmlHeader=False,
+                                encoding=enc or "utf-8"))
                     else:
-                        self.p.generateOutputFileFromString(
-                            out_path, whole_text, needXmlHeader=False)
+                        self._write_atomic(
+                            out_path,
+                            lambda p: self.p.generateOutputFileFromString(
+                                p, whole_text, needXmlHeader=False))
                     written += 1
+                    self._record_done(rel, full, out_path)
 
         if "chars_all_in" in extract:
             del extract["chars_all_in"]
@@ -2442,9 +2695,9 @@ class TranslationJob(object):
             for i, pie in enumerate(self.p.splitTextToPiecesAtLength(chars, 500)):
                 extract["text_gen_for_font_%d" % i] = pie
         if extract:
-            self.p.generateOutputXml(
+            self._write_atomic(
                 os.path.join(done_dir, "___auto_put_this_to_text_folder.xml"),
-                extract, splitLength=1000)
+                lambda p: self.p.generateOutputXml(p, extract, splitLength=1000))
         self.log("已写出文件 %d 个（镜像原目录结构，格式保持不变）" % written)
         if failed:
             self.log("有 %d 个文件处理失败（已跳过，其余照常完成），详见日志"
@@ -2456,8 +2709,9 @@ class TranslationJob(object):
         if not done:
             return
         try:
-            os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-            self.p.generateOutputXml(temp_path, done, splitLength=1000)
+            self._write_atomic(
+                temp_path,
+                lambda p: self.p.generateOutputXml(p, done, splitLength=1000))
             self._temp_clock = time.time()
         except Exception as e:
             self.detail("  临时进度写入失败：%s: %s" % (type(e).__name__, e))
@@ -2532,8 +2786,9 @@ class TranslationJob(object):
             except OSError:
                 pass
             return 0
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        self.p.generateOutputXml(out_path, done, splitLength=1000)
+        self._write_atomic(
+            out_path,
+            lambda p: self.p.generateOutputXml(p, done, splitLength=1000))
         self.progress({"file": fn, "ids": len(texts), "total_ids": len(texts),
                        "file_idx": idx, "files": total, "reqs": self.req_count})
         return len(texts)
@@ -2595,7 +2850,7 @@ class TranslationJob(object):
                 return False
             rel = os.path.relpath(full, self.in_dir)
             out_path = os.path.join(done_dir, rel)
-            if os.path.exists(out_path):
+            if self._should_skip(rel, full, out_path, self.mode):
                 continue
             self.log("[%d/%d] %s" % (idx, total, rel))
             try:
@@ -2610,23 +2865,28 @@ class TranslationJob(object):
                 continue
             whole_text, rep_dict, enc = rep
             if rep_dict or self.output_anyway:
-                os.makedirs(os.path.dirname(out_path), exist_ok=True)
                 if self.mode in ("ltx", "cfgxml"):
-                    self.p.generateOutputFileFromString(
-                        out_path, whole_text, needXmlHeader=False,
-                        encoding=enc or "utf-8")
+                    self._write_atomic(
+                        out_path,
+                        lambda p: self.p.generateOutputFileFromString(
+                            p, whole_text, needXmlHeader=False,
+                            encoding=enc or "utf-8"))
                 else:
-                    self.p.generateOutputFileFromString(
-                        out_path, whole_text, needXmlHeader=False)
+                    self._write_atomic(
+                        out_path,
+                        lambda p: self.p.generateOutputFileFromString(
+                            p, whole_text, needXmlHeader=False))
+                self._record_done(rel, full, out_path)
         if self.mode == "scriptL" and "chars_all_in" in extract:
             chars = "".join(extract["chars_all_in"])
             extract.clear()
             for i, pie in enumerate(self.p.splitTextToPiecesAtLength(chars, 500)):
                 extract["text_gen_for_font_%d" % i] = pie
         if extract:
-            self.p.generateOutputXml(
+            self._write_atomic(
                 os.path.join(done_dir, "___%s__put_this_to_text_folder.xml"
-                             % self.mode), extract, splitLength=1000)
+                             % self.mode),
+                lambda p: self.p.generateOutputXml(p, extract, splitLength=1000))
         if failed:
             self.log("有 %d 个文件处理失败（已跳过，其余照常完成），详见日志"
                      % failed, "warn")
@@ -2654,8 +2914,9 @@ class TranslationJob(object):
             return None
         rep = {}
         for cand in cands:
-            if cand in reuse:
-                continue
+            # 这里不能按 reuse 跳过：reuse 的键是文本 XML 的 string id，
+            # 与 ltx/cfg/script 的候选串不是同一命名空间；真命中了也拿不到
+            # 译文，只会把原文留在输出里。非文本模式的复用由账本负责。
             if self.mode == "cfgxml":
                 if cand.strip() == "" or self.p.doesTextLookLikeId(cand):
                     continue
@@ -2826,7 +3087,15 @@ class AiTranslateTab(object):
         self.probe_cache = {}
         self._last_ui_byte = -1
         self.log_lines = []
-        self.gloss_user = load_user_glossary()
+        # 术语分两层：builtin（随包只读）+ 用户覆盖层（可变），见 load_glossary_layers
+        (self.gloss_user, self._gloss_set, self._gloss_deleted,
+         self._gloss_clear) = load_glossary_layers()
+        # 附加提示词必须由 **UI 线程**读控件后缓存到这里；工作线程只读这个
+        # 字符串（1.6.0 之前工作线程直接读 tk.Text，异常被吞成空串，
+        # 导致该功能实际从未生效）。
+        self._prompt_extra_text = str(self.cfg.get("prompt_extra") or "")
+        self._starting = False
+        self._cfg_save_warned = False
         self.scan_info = None
         self.scan_dir = None
         self._mode_plain = self.cfg.get("mode", "auto")
@@ -3237,12 +3506,20 @@ class AiTranslateTab(object):
 
     @staticmethod
     def _cudart_present(d):
+        """CUDA 运行时是否**完整**安装。
+
+        1.6.0 之前只要任意一个文件以 cudart/cublas/nvrtc 开头就算装好 ——
+        半套解压也会被判为可用，随后 ggml-cuda 初始化失败、静默回退 CPU。
+        现在要求 3 组标记**全部**命中；安装成功时会额外写一个 marker。
+        """
         try:
             files = [f.lower() for f in os.listdir(d)]
         except OSError:
             return False
-        return any(any(f.startswith(m) for m in _CUDART_MARKS)
-                   for f in files)
+        has_core = any(f.startswith("cudart64") for f in files)
+        if _CUDART_MARK in files:
+            return has_core          # marker 在但核心 DLL 被删 → 仍需重装
+        return all(any(f.startswith(m) for f in files) for m in _CUDART_MARKS)
 
     @staticmethod
     def _exe_matches_variant(exe_path, variant):
@@ -3300,22 +3577,21 @@ class AiTranslateTab(object):
             pass
 
     def _push_prompt_extra(self):
-        """把界面上的「附加提示词/约束」推给引擎对象，并留痕一次。
+        """把「附加提示词/约束」推给引擎对象，并留痕一次。
 
-        引擎可能复用上一轮进程（不重启），所以由调用方在每次开跑前推一次，
-        否则用户刚改的内容要等到下次换档才生效。
+        **只读 `_prompt_extra_text` 缓存，不碰控件**：本方法由 on_start/on_run
+        的**工作线程**调用；tk.Text 在非主线程读取会抛
+        `RuntimeError: main thread is not in main loop`（1.6.0 之前就是这样被
+        吞成空串，功能实际从未生效）。缓存由 UI 线程的 _persist_cfg 更新。
         """
         if self.server is None:
             return
-        try:
-            txt = _multiline_get(self.extra_prompt).strip()
-        except Exception:
-            txt = ""
+        txt = str(getattr(self, "_prompt_extra_text", "") or "").strip()
         self.server.prompt_extra = txt
-        self.cfg["prompt_extra"] = txt
         if txt:
-            self.log("已启用附加提示词（%d 字符），作为「补充要求」追加在内置规则后"
-                     % len(txt))
+            self.ui_call(
+                self.log, "已启用附加提示词（%d 字符），作为「补充要求」"
+                          "追加在内置规则后" % len(txt))
 
     def _persist_cfg(self):
         self.cfg["tier"] = self.current_tier()
@@ -3339,14 +3615,22 @@ class AiTranslateTab(object):
         try:
             self.cfg["prompt_extra"] = _multiline_get(
                 self.extra_prompt).strip()
+            # UI 线程读好 → 缓存给工作线程用（见 _push_prompt_extra）
+            self._prompt_extra_text = self.cfg["prompt_extra"]
         except Exception:
             pass
-        save_config(self.cfg)
+        if not save_config(self.cfg) and not self._cfg_save_warned:
+            self._cfg_save_warned = True
+            self.log("配置保存失败（%s）：本次设置只在内存生效，重启后会丢失"
+                     % (_LAST_CONFIG_ERROR or "未知原因"), "warn")
+        elif _LAST_CONFIG_ERROR == "":
+            self._cfg_save_warned = False
 
     def on_extra_demo(self):
         """填入示例模板：说明这个框是用来放哪类要求的（可整段删改）。"""
         _multiline_set(self.extra_prompt, EXTRA_PROMPT_DEMO)
         self.cfg["prompt_extra"] = EXTRA_PROMPT_DEMO
+        self._prompt_extra_text = EXTRA_PROMPT_DEMO
         self.log("已填入示例模板（可整段删改）。注意此处是软引导："
                  "模型多数情况会遵守，但不保证 100%；"
                  "必须强制统一的译名请用「强制术语」放进术语库。", "warn")
@@ -3365,8 +3649,11 @@ class AiTranslateTab(object):
             self.log("请填写原文与强制译文两项", "warn")
             return
         self.gloss_user[k] = v
+        self._gloss_set[k] = v
+        self._gloss_deleted.discard(k)
         try:
-            save_user_glossary(self.gloss_user)
+            save_user_glossary(self._gloss_set, self._gloss_deleted,
+                               self._gloss_clear)
         except Exception as e:
             self.log("术语库保存失败：%s" % e, "err")
             return
@@ -3383,8 +3670,16 @@ class AiTranslateTab(object):
             return
         if k in self.gloss_user:
             del self.gloss_user[k]
-            save_user_glossary(self.gloss_user)
-            self.log("已删除术语：%s" % k)
+            if k in self._gloss_set:
+                del self._gloss_set[k]          # 删的是自己加的
+            else:
+                self._gloss_deleted.add(k)      # 删的是内置词条 → 记墓碑
+            try:
+                save_user_glossary(self._gloss_set, self._gloss_deleted,
+                                   self._gloss_clear)
+                self.log("已删除术语：%s" % k)
+            except Exception as e:
+                self.log("术语库保存失败：%s" % e, "err")
         else:
             self.log("术语库中没有该原文：%s" % k, "warn")
         _entry_set(self.gk_entry, "")
@@ -3400,9 +3695,17 @@ class AiTranslateTab(object):
         if not ok:
             return
         self.gloss_user = {}
-        save_user_glossary(self.gloss_user)
+        self._gloss_set = {}
+        self._gloss_deleted = set()
+        self._gloss_clear = True               # 连内置词条一起隐藏
+        try:
+            save_user_glossary(self._gloss_set, self._gloss_deleted,
+                               self._gloss_clear)
+        except Exception as e:
+            self.log("术语库保存失败：%s" % e, "err")
+            return
         self.refresh_gloss_view()
-        self.log("内置术语库已清空")
+        self.log("术语库已清空（内置词条被用户层隐藏；重新导入即可恢复）")
 
     def on_gloss_import(self):
         try:
@@ -3429,7 +3732,15 @@ class AiTranslateTab(object):
             return
         before = len(self.gloss_user)
         self.gloss_user.update(incoming)
-        save_user_glossary(self.gloss_user)
+        self._gloss_set.update(incoming)
+        # 导入的条目优先生效：把它们从"墓碑"里移除
+        self._gloss_deleted.difference_update(incoming)
+        try:
+            save_user_glossary(self._gloss_set, self._gloss_deleted,
+                               self._gloss_clear)
+        except Exception as e:
+            self.log("术语库保存失败：%s" % e, "err")
+            return
         self.refresh_gloss_view()
         self.log("已从 %s 合并 %d 条（术语库 %d → %d 条）"
                  % (os.path.basename(f), len(incoming), before,
@@ -3567,11 +3878,6 @@ class AiTranslateTab(object):
             self.log("已切换模型档，运行中的引擎仍是旧模型，重启引擎生效",
                      "warn")
 
-    PROBE_KIND_TASKS = {
-        "rt": ("bin_cpu", "bin_cuda", "bin_vulkan"),
-        "model": tuple(TIER_PROFILES[t]["task"] for t in BUILTIN_TIERS),
-    }
-
     def _probe_task_key(self, kind):
         if kind == "rt":
             return "bin_" + self.current_variant()
@@ -3603,6 +3909,9 @@ class AiTranslateTab(object):
     def on_probe(self, kind):
         """测速：kind='rt' 当前后端运行库；kind='model' 当前模型档。
         未测速过时，下载会自动先测速再拉取。"""
+        if kind == "model" and self.current_tier() == "custom":
+            self.log("自选档使用本机 .gguf，无需测速下载", "warn")
+            return
         task, key = self._sources_for(kind)
         btn = self.btn_probe_rt if kind == "rt" else self.btn_probe_model
         self.ui.set_state(btn, "disabled")
@@ -3712,16 +4021,19 @@ class AiTranslateTab(object):
                                  % _DOWNLOAD_DIR, "warn")
                 self.ui_call(self.log, "下载：%s（首选 %s，共 %d 个源备援）"
                              % (task["label"], ordered[0][0], len(ordered) - 1))
-                download_one(ordered, target,
-                             log=lambda m, tag="info": self.ui_call(self.log, m, tag),
-                             progress=progress,
-                             cancel_event=self.dl_cancel)
-                digest = verify_artifact(
-                    target, task,
+                # 校验放在 download_one 内部逐个源进行：某个镜像给了坏文件时
+                # 删掉它并自动换下一个源（1.6.0 之前只是删文件让用户手动重试）。
+                digest = download_one(
+                    ordered, target,
                     log=lambda m, tag="info": self.ui_call(self.log, m, tag),
-                    known_hashes=self.cfg.get("artifact_hashes"))
+                    progress=progress,
+                    cancel_event=self.dl_cancel,
+                    verify=lambda p: verify_artifact(
+                        p, task,
+                        log=lambda m, tag="info": self.ui_call(self.log, m, tag),
+                        known_hashes=self.cfg.get("artifact_hashes")))
                 self.cfg.setdefault("artifact_hashes", {})[
-                    task.get("filename") or os.path.basename(target)] = digest
+                    os.path.basename(target)] = digest
                 save_config(self.cfg)
                 if task["kind"] == "zip":
                     dest = os.path.join(_BIN_DIR, task["variant"])
@@ -3745,7 +4057,7 @@ class AiTranslateTab(object):
                 self.ui_call(self.log, "已取消，断点已保留")
             except InvalidArtifact as e:
                 self.ui_call(self.log,
-                             "下载产物校验未通过，已删除，请换源重试：%s" % e,
+                             "下载产物校验未通过（已依次尝试所有源）：%s" % e,
                              "err")
             except Exception as e:
                 self.ui_call(self.log, "下载失败：%s" % e, "err")
@@ -3765,15 +4077,8 @@ class AiTranslateTab(object):
         self.refresh_local_status()
 
     def _install_extra_runtime(self, extra, dest):
-        """CUDA 后端第二步：下载并解压 cudart 运行时；关键 DLL 已存在则跳过。"""
-        marks = extra.get("marks", ())
-        try:
-            have = any(
-                any(f.lower().startswith(m) for m in marks)
-                for f in os.listdir(dest))
-        except OSError:
-            have = False
-        if have:
+        """CUDA 后端第二步：下载并解压 cudart 运行时；完整安装则跳过。"""
+        if self._cudart_present(dest):
             self.ui_call(self.dl_log,
                          "%s 已存在，跳过" % extra["label"])
             return
@@ -3793,21 +4098,27 @@ class AiTranslateTab(object):
             self.ui_call(self.dl_log, "  cudart：%.0f%% %.1f MB/s"
                          % (100.0 * done / total if total else 0, speed))
 
-        download_one(
+        rt_task = {"kind": "zip", "name_prefix": "cudart64",
+                   "size_hint": 0.37, "sha256": extra.get("sha256", "")}
+        digest = download_one(
             ok, rt_zip,
             log=lambda m: self.ui_call(self.dl_log, m),
             progress=rt_progress,
-            cancel_event=self.dl_cancel)
-        digest = verify_artifact(
-            rt_zip, {"kind": "zip", "name_prefix": "cudart64",
-                     "size_hint": 0.37,
-                     "sha256": extra.get("sha256", "")},
-            log=lambda m: self.ui_call(self.dl_log, m),
-            known_hashes=self.cfg.get("artifact_hashes"))
+            cancel_event=self.dl_cancel,
+            verify=lambda p: verify_artifact(
+                p, rt_task,
+                log=lambda m, tag="info": self.ui_call(self.dl_log, m),
+                known_hashes=self.cfg.get("artifact_hashes")))
         self.cfg.setdefault("artifact_hashes", {})["cudart_runtime.zip"] = digest
         save_config(self.cfg)
-        with zipfile.ZipFile(rt_zip) as z:
-            z.extractall(dest)
+        _extract_zip_into(rt_zip, dest)
+        try:
+            with open(os.path.join(dest, _CUDART_MARK), "w",
+                      encoding="utf-8") as f:
+                json.dump({"sha256": digest, "installed": time.strftime(
+                    "%Y-%m-%d %H:%M:%S")}, f)
+        except OSError:
+            pass
         try:
             os.remove(rt_zip)
         except OSError:
@@ -3950,29 +4261,46 @@ class AiTranslateTab(object):
             return
         model, exe, tier, ctx = plan
         variant = self.current_variant()
+        if self._starting:
+            self.log("正在启动引擎，请稍候", "warn")
+            return
+        need_stop = False
         if self.server and self.server.is_running():
             sig = (self.server.model, self.server.variant, self.server.ctx_size)
             if sig == (model, variant, ctx):
                 self.log("引擎已在运行（相同模型/上下文）")
                 return
-            self.log("模型或上下文已变更，先停止旧引擎…")
-            self.server.stop()
+            need_stop = True
+        self._starting = True
         self.ui.set_state(self.btn_start, "disabled")
         self.log("正在加载 %s，上下文 %d token，首次加载较慢，请稍候…"
                  % (TIER_PROFILES[tier]["combo"][:2], ctx))
 
         def work():
             try:
-                self.server = LlamaServer(
+                if need_stop:
+                    # 停旧引擎会 taskkill + wait（最长约 15 秒）——必须在工作线程，
+                    # 否则切模型时整个界面冻结（1.6.0 之前就是在 Tk 回调里同步停的）。
+                    self.ui_call(self.log, "模型或上下文已变更，先停止旧引擎…")
+                    old = self.server
+                    if old is not None:
+                        old.stop()
+                    self.server = None
+                srv = LlamaServer(
                     exe, model, variant,
                     log=lambda m, tag="info": self.ui_call(self.log, m, tag),
                     ctx_size=ctx, tier=tier)
+                self.server = srv
                 self._push_prompt_extra()
-                self.server.start()
+                srv.start()
                 self.ui_call(self._engine_ui, True)
             except Exception as e:
                 self.ui_call(self.log, "引擎启动失败：%s" % e, "err")
                 self.ui_call(self._engine_ui, False)
+            finally:
+                self._starting = False
+                self.ui_call(self._engine_ui,
+                             bool(self.server and self.server.is_running()))
         threading.Thread(target=work, daemon=True).start()
 
     def _engine_ui(self, on):
@@ -3989,6 +4317,12 @@ class AiTranslateTab(object):
 
     def on_run(self):
         self._persist_cfg()
+        if self.tr_cancel is not None:
+            self.log("已有翻译任务在进行", "warn")
+            return
+        if self._starting:
+            self.log("引擎正在启动，请稍候再开始翻译", "warn")
+            return
         in_dir = self.in_box.get_text()
         if not in_dir or not os.path.isdir(in_dir):
             self.log("请先选择有效的待翻译目录", "warn")

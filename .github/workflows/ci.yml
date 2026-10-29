@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # 与历史工具集发布环境一致：Windows + Python 3.12
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 插件是纯标准库实现，测试不需要第三方依赖；
+      # 若将来测试引入依赖，请显式写在这里（不要让"没装"变成"没检查"）。
+      - name: Regression suite (100)
+        run: python tests/test_ai_translate_fixes.py
+
+      - name: Share package hygiene / cold start / read-only fallback
+        run: python tests/test_share_package.py
+
+      # 发布清单门禁：版本、zip 哈希、官哈希、术语规模、tools/随包一致性
+      # 必须与已提交内容一致；--check 只校验不写文件。
+      - name: Release manifest drift
+        run: python tools/gen_release_manifest.py --check

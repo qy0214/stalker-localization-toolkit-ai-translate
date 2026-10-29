@@ -28,4 +28,13 @@ python build_termbase.py
 ```
 
 生成的 `stalker_termbase.json` 复制到 `plugins/ai_translate_assets/` 即可随插件分发。
-`glossary_user.json` 是运行时扁平词库，由发布流程单独维护。
+发布清单会校验 `tools/stalker_termbase.json` 与随包副本**逐字节一致**，避免按本文
+重建时把线上的人工修订（补录/定稿译名/PDA 口径）整批回退。
+
+运行时词库分两层：
+
+- `plugins/ai_translate_assets/glossary_builtin.json`：**随包只读层**，由发布流程维护；
+  当前没有一键生成脚本（它由插件端的展开结果固化），改动请直接编辑后重跑清单生成器。
+- `<用户数据目录>/glossary_user.json`：**用户覆盖层**，插件界面里的新增/删除/清空写在这里，
+  格式为 `{"_format": "ai-translate-glossary-user/1", "set": {...}, "del": [...],
+  "clear_builtin": false}`；旧版扁平文件会被自动识别为"与内置的差异"并迁移。

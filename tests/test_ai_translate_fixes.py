@@ -2,7 +2,7 @@
 """ai_translate.py 修复验证套件（D1~D32 对应断言）
 
 用法:
-    python test_ai_translate_fixes.py [plugin.py 路径] [旧版 xray_pkg.zip]
+    python test_ai_translate_fixes.py [plugin.py 路径]
 
 约定:
     * 不依赖 pytest，自带极简断言器；退出码 0 = 全通过
@@ -20,18 +20,16 @@ import shutil
 import sys
 import tempfile
 import threading
-import time
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 PLUGIN = (sys.argv[1] if len(sys.argv) > 1 else
           os.path.join(ROOT, "plugins", "ai_translate.py"))
-OLD_ZIP = (sys.argv[2] if len(sys.argv) > 2 else
-           os.path.join(ROOT, "plugins", "ai_translate_assets", "xray_pkg.zip"))
+VENDOR_ZIP = os.path.join(ROOT, "plugins", "ai_translate_assets", "xray_pkg.zip")
 
 # 在临时副本上跑，避免插件导入时在仓库里生成 bin/models/logs/config。
-_ORIG_PLUGIN, _ORIG_ZIP = PLUGIN, OLD_ZIP
+_ORIG_PLUGIN, _ORIG_ZIP = PLUGIN, VENDOR_ZIP
 _TEST_ROOT = tempfile.mkdtemp(prefix="ait_plugin_")
 os.makedirs(os.path.join(_TEST_ROOT, "ai_translate_assets"), exist_ok=True)
 shutil.copy2(_ORIG_PLUGIN, os.path.join(_TEST_ROOT, "ai_translate.py"))
@@ -71,8 +69,6 @@ def t1_encoding():
     print("\n--- T1 编码判定链 ---")
     zh = "潜行者，去酒吧找一个神器。"          # UTF-8 中文字节里含 0x98
     ru = "Привет, сталкер. Иди к Бару."        # 含 И(D0 98)
-    zh_xml = ('<string_table><string id="x"><rus>%s</rus></string>'
-              '</string_table>' % zh).encode("utf-8")
     wrong_decl = ('<?xml version="1.0" encoding="cp1251"?>\n'
                   '<string_table><string id="x"><rus>%s</rus></string>'
                   '</string_table>' % zh).encode("utf-8")
@@ -720,50 +716,25 @@ def load_pkg_from_zip(zip_path, pkg_name, dir_name="xRayXmlParser"):
 
 
 def t13_vendor():
-    print("\n--- T13 vendor 包行为等价 ---")
-    new_zip = os.path.join(HERE, "xray_pkg_fixed.zip")
-    if not os.path.exists(new_zip):
-        check("T13-0 已生成修复后的 zip", False, new_zip)
-        return
-    old = load_pkg_from_zip(OLD_ZIP, "xRayOld")
-    new = load_pkg_from_zip(new_zip, "xRayNew")
-    samples = [
-        'name = "Значение"',
-        'a = "текст"; b = "ещё"',
-        'x = {1,2,3} y = "текст с фигурными скобками"',
-        '<?xml version="1.0" encoding="cp1251"?>',
-        'load ~ ~ ~~',
-        'str = "a:1 b:2"',
-        'local t = "Пример"; -- комментарий',
-        'var = "Многострочный\nтекст"',
-    ]
-    diff = []
-    for s in samples:
-        for fn, args in (("getLtxPotentialTexts", (s,)),
-                         ("getConfigXmlPotentialTexts", (s,)),
-                         ("getScriptPotentialTexts", (s,))):
-            a = sorted(getattr(old, fn)(*args))
-            b = sorted(getattr(new, fn)(*args))
-            if a != b:
-                diff.append((fn, s, a, b))
-        for fn in ("doesTextLookLikeId", "doesTextLookLikeScript"):
-            if getattr(old, fn)(s) != getattr(new, fn)(s):
-                diff.append((fn, s))
-        if old.getEncodingDeclaration(s) != new.getEncodingDeclaration(s):
-            diff.append(("getEncodingDeclaration", s))
-        if old.normalize_xml_string(s) != new.normalize_xml_string(s):
-            diff.append(("normalize_xml_string", s))
-    check("T13-1 8 类样本 × 9 个函数 输出完全一致（仅改了转义写法）",
-          not diff, str(diff[:2]))
+    print("\n--- T13 vendor 包完整性 ---")
     import warnings
-    z = zipfile.ZipFile(new_zip)
-    total = 0
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        for n in z.namelist():
-            compile(z.read(n).decode("utf-8"), n, "exec")
-        total = sum(1 for x in w if issubclass(x.category, SyntaxWarning))
-    check("T13-2 修复后无 SyntaxWarning（原 5 条）", total == 0, str(total))
+    with zipfile.ZipFile(VENDOR_ZIP) as z:
+        names = z.namelist()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            for n in names:
+                compile(z.read(n).decode("utf-8"), n, "exec")
+        warns = sum(1 for x in w if issubclass(x.category, SyntaxWarning))
+    check("T13-1 随包解析器可编译且无 SyntaxWarning", warns == 0,
+          "%d 个文件 / %d 条告警" % (len(names), warns))
+    pkg = load_pkg_from_zip(VENDOR_ZIP, "xRay")
+    need = ("getLtxPotentialTexts", "getConfigXmlPotentialTexts",
+            "getScriptPotentialTexts", "doesTextLookLikeId",
+            "doesTextLookLikeScript", "getEncodingDeclaration",
+            "normalize_xml_string")
+    missing = [n for n in need if not hasattr(pkg, n)]
+    check("T13-2 解析器关键函数齐全（提取/编码/ID 判定依赖）",
+          not missing, str(missing))
 
 
 # ----------------------------------------------------------------------
@@ -934,11 +905,307 @@ def t15_hint_block():
 
 
 # ----------------------------------------------------------------------
+# T16 附加提示词：工作线程只读缓存，不碰控件
+# ----------------------------------------------------------------------
+def t16_prompt_cache():
+    print()
+    print("--- T16 附加提示词（线程安全） ---")
+    import queue as _queue
+    tab = ait.AiTranslateTab.__new__(ait.AiTranslateTab)
+    tab._q = _queue.Queue()
+    tab._tk = None
+    tab._top = None
+    tab.log_lines = []
+    tab._log_ui_error = lambda fn, e: None
+    tab.api = type("A", (), {"log_detail": lambda *a: None})()
+    tab.log = lambda *a, **k: None
+
+    class Srv(object):
+        prompt_extra = ""
+
+    class BoomWidget(object):
+        def get(self, *a):
+            raise AssertionError("工作线程不应读取 Tk 控件")
+
+    tab.server = Srv()
+    tab.extra_prompt = BoomWidget()
+    tab._prompt_extra_text = "· 语气：冷峻。"
+    tab._push_prompt_extra()
+    check("T16-1 推送使用缓存文本（不触碰控件）",
+          tab.server.prompt_extra == "· 语气：冷峻。",
+          repr(tab.server.prompt_extra))
+    tab._prompt_extra_text = ""
+    tab._push_prompt_extra()
+    check("T16-2 缓存为空时推送空串", tab.server.prompt_extra == "")
+    import inspect
+    src = inspect.getsource(ait.AiTranslateTab._push_prompt_extra)
+    check("T16-3 实现里不再调用 _multiline_get（源码级回归）",
+          "_multiline_get" not in src)
+
+
+# ----------------------------------------------------------------------
+# T17 完成账本：输出存在 ≠ 已译完
+# ----------------------------------------------------------------------
+def t17_ledger():
+    print()
+    print("--- T17 完成账本（防漏译/防残留） ---")
+    d = os.path.join(TMP, "t17")
+    src_dir = os.path.join(d, "in")
+    out_dir = os.path.join(d, "out")
+    os.makedirs(os.path.join(src_dir, "configs"), exist_ok=True)
+    ltx = os.path.join(src_dir, "configs", "a.ltx")
+    with open(ltx, "w", encoding="utf-8") as f:
+        # 只用上游 ltx 提取器认可的键（description* / inv_name* / title / descr），
+        # 且句子不含逗号（上游按分隔符切候选）。
+        f.write('[dialogs]\ndescr = "Привет сталкер."\ntitle = "Пока."\n')
+    out_ltx = os.path.join(out_dir, "configs", "a.ltx")
+
+    s1 = FakeServer()
+    make_job(src_dir, mode="auto", out_dir=out_dir, server=s1).run()
+    body1 = open(out_ltx, encoding="utf-8").read() if os.path.isfile(out_ltx) else ""
+    # ltx 走"提取"路径：输出里的取值被换成生成的文本 ID，译文落在
+    # ___auto_put_this_to_text_folder.xml（上游设计）
+    extract_xml = os.path.join(out_dir, "___auto_put_this_to_text_folder.xml")
+    check("T17-1 首次翻译写出译文（ID 回填 + 译文 XML）",
+          bool(body1) and "sgtat_gen_text_" in body1
+          and os.path.isfile(extract_xml)
+          and "译:Привет" in open(extract_xml, encoding="utf-8").read(),
+          body1.strip()[:60])
+    ledger = os.path.join(out_dir, ".ai_translate_done.json")
+    check("T17-2 生成完成账本", os.path.isfile(ledger))
+
+    s2 = FakeServer()
+    make_job(src_dir, mode="auto", out_dir=out_dir, server=s2).run()
+    check("T17-3 输入未变 → 账本命中，0 次模型调用",
+          not s2.calls, "%d 次" % len(s2.calls))
+
+    with open(ltx, "a", encoding="utf-8") as f:
+        f.write('description1 = "Новая строка."\n')
+    s3 = FakeServer()
+    make_job(src_dir, mode="auto", out_dir=out_dir, server=s3).run()
+    body = open(out_ltx, encoding="utf-8").read()
+    extract_xml = os.path.join(out_dir, "___auto_put_this_to_text_folder.xml")
+    check("T17-4 输入新增内容 → 重译且不漏新行",
+          bool(s3.calls) and "Новая строка" in open(
+              extract_xml, encoding="utf-8").read(),
+          body.strip()[-60:])
+
+    half = body[:max(1, len(body) // 2)]
+    with open(out_ltx, "w", encoding="utf-8") as f:
+        f.write(half)
+    s4 = FakeServer()
+    make_job(src_dir, mode="auto", out_dir=out_dir, server=s4).run()
+    body4 = open(out_ltx, encoding="utf-8").read()
+    check("T17-5 中断残留（半截输出）→ 重做而不是永久跳过",
+          bool(s4.calls) and len(body4) > len(half)
+          and body4.count("sgtat_gen_text_") >= 3,
+          "%d 字 → %d 字" % (len(half), len(body4)))
+
+
+# ----------------------------------------------------------------------
+# T18 术语分层：随包只读 + 用户覆盖层
+# ----------------------------------------------------------------------
+def t18_glossary_layers():
+    print()
+    print("--- T18 术语分层（升级不丢用户词条） ---")
+    d = os.path.join(TMP, "t18")
+    os.makedirs(d, exist_ok=True)
+    builtin = os.path.join(d, "glossary_builtin.json")
+    legacy = os.path.join(d, "legacy_missing.json")
+    user = os.path.join(d, "glossary_user.json")
+
+    def write_json(path, data):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+
+    write_json(builtin, {"A": "甲", "B": "乙"})
+    old = (ait._GLOSS_BUILTIN, ait._GLOSS_BUILTIN_LEGACY, ait._GLOSS_USER)
+    ait._GLOSS_BUILTIN, ait._GLOSS_BUILTIN_LEGACY, ait._GLOSS_USER = (
+        builtin, legacy, user)
+    try:
+        merged, smap, dels, clr = ait.load_glossary_layers()
+        check("T18-1 无用户层时 = 随包术语",
+              merged == {"A": "甲", "B": "乙"}, str(merged))
+
+        ait.save_user_glossary({"C": "丙"}, {"B"}, False)
+        merged, smap, dels, clr = ait.load_glossary_layers()
+        check("T18-2 用户新增/删除（墓碑）生效",
+              merged == {"A": "甲", "C": "丙"}, str(merged))
+
+        write_json(builtin, {"A": "甲", "B": "乙", "D": "丁"})
+        merged, smap, dels, clr = ait.load_glossary_layers()
+        check("T18-3 随包更新能生效（用户层不是全量快照）",
+              merged == {"A": "甲", "C": "丙", "D": "丁"}, str(merged))
+
+        write_json(user, {"A": "甲", "B": "乙改", "D": "丁"})
+        merged, smap, dels, clr = ait.load_glossary_layers()
+        check("T18-4 旧版扁平文件只把差异留作覆盖",
+              smap == {"B": "乙改"} and merged.get("A") == "甲", str(smap))
+
+        ait.save_user_glossary({}, set(), True)
+        merged, smap, dels, clr = ait.load_glossary_layers()
+        check("T18-5 clear_builtin 清空随包术语", merged == {}, str(merged))
+    finally:
+        (ait._GLOSS_BUILTIN, ait._GLOSS_BUILTIN_LEGACY,
+         ait._GLOSS_USER) = old
+
+
+# ----------------------------------------------------------------------
+# T19 原子写 + 占位符安全切分
+# ----------------------------------------------------------------------
+def t19_atomic_split():
+    print()
+    print("--- T19 原子写 / 占位符切分 ---")
+    d = os.path.join(TMP, "t19")
+    job = make_job(os.path.join(d, "in"), mode="auto",
+                   out_dir=os.path.join(d, "out"))
+    out = os.path.join(d, "out", "x.txt")
+
+    def full(p):
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("完整成品")
+
+    job._write_atomic(out, full)
+    check("T19-1 原子写落地且无 .tmp 残留",
+          open(out, encoding="utf-8").read() == "完整成品"
+          and not os.path.exists(out + ".tmp"))
+
+    def boom(p):
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("半截")
+        raise RuntimeError("模拟中断")
+
+    try:
+        job._write_atomic(out, boom)
+        check("T19-2 写入失败应抛异常", False)
+    except RuntimeError:
+        check("T19-2 写入失败不破坏既有成品且不留 .tmp",
+              open(out, encoding="utf-8").read() == "完整成品"
+              and not os.path.exists(out + ".tmp"))
+
+    text = "甲" * 120 + "$$T1$$" + "乙" * 120 + "$$T2$$" + "丙" * 120
+    parts = ait.split_protected(text, 100, ait._PLACEHOLDER_RE)
+    intact = sum(p.count("$$T1$$") + p.count("$$T2$$") for p in parts)
+    broken = sum(p.count("$$T1") - p.count("$$T1$$")
+                 + p.count("$$T2") - p.count("$$T2$$") for p in parts)
+    check("T19-3 占位符不被切断（拼接无损、无半截标记）",
+          "".join(parts) == text and intact == 2 and broken == 0,
+          "intact=%d broken=%d" % (intact, broken))
+
+
+# ----------------------------------------------------------------------
+# T20 校验失败自动换源 + CUDA 运行时完整性
+# ----------------------------------------------------------------------
+def t20_verify_switch():
+    print()
+    print("--- T20 下载校验换源 / CUDA 完整性 ---")
+    d = os.path.join(TMP, "t20")
+    dest = os.path.join(d, "rt")
+    os.makedirs(dest, exist_ok=True)
+
+    with open(os.path.join(dest, "cudart64_12.dll"), "wb") as f:
+        f.write(b"x")
+    check("T20-1 只有 cudart 一个文件 → 判为不完整",
+          not ait.AiTranslateTab._cudart_present(dest))
+    for name in ("cublas64_12.dll", "nvrtc64_120_0.dll"):
+        with open(os.path.join(dest, name), "wb") as f:
+            f.write(b"x")
+    check("T20-2 三组标记齐全 → 判为完整",
+          ait.AiTranslateTab._cudart_present(dest))
+
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    good = b"GOOD" * 1024
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            body = b"BAD" if self.path == "/bad" else good
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    httpd = HTTPServer(("127.0.0.1", 0), H)
+    port = httpd.server_port
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    target = os.path.join(d, "payload.bin")
+
+    def verify(path):
+        data = open(path, "rb").read()
+        if data != good:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            raise ait.InvalidArtifact("内容不符")
+        return "digest-ok"
+
+    try:
+        got = ait.download_one(
+            [("bad", "http://127.0.0.1:%d/bad" % port),
+             ("good", "http://127.0.0.1:%d/good" % port)],
+            target, log=lambda *a, **k: None, verify=verify,
+            retries_per_source=1)
+        ok = (got == "digest-ok" and os.path.isfile(target)
+              and open(target, "rb").read() == good)
+    finally:
+        httpd.shutdown()
+    check("T20-3 第一源校验失败 → 自动换下一源并成功", ok)
+
+
+# ----------------------------------------------------------------------
+# T21 启动自检：推理型模型不误报
+# ----------------------------------------------------------------------
+def t21_self_check():
+    print()
+    print("--- T21 启动自检误报 ---")
+
+    def make_srv(behaviors):
+        srv = ait.LlamaServer("x.exe", "y.gguf", "cpu",
+                              log=lambda *a, **k: None)
+        calls = []
+
+        def fake(text, src, tgt, timeout_sec=180, max_tokens=None,
+                 use_extra=True):
+            calls.append(max_tokens)
+            item = behaviors[len(calls) - 1]
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        srv.translate = fake
+        return srv, calls
+
+    srv, calls = make_srv([OSError("翻译请求失败：空输出"), "你好。"])
+    ok = srv.self_check()
+    check("T21-1 小预算空输出 → 256 token 复核通过（不误报）",
+          ok and srv.health_warn == "" and calls == [16, 256],
+          "%s / %r" % (calls, srv.health_warn))
+
+    srv, calls = make_srv([ait.OutputTruncated("撞满上限")])
+    ok = srv.self_check()
+    check("T21-2 真正停不下来 → 报 tokenizer/EOS 问题",
+          (not ok) and "tokenizer" in srv.health_warn,
+          srv.health_warn[:70])
+
+    srv, calls = make_srv([OSError("空输出"), OSError("空输出")])
+    ok = srv.self_check()
+    check("T21-3 两次空输出 → 提示推理型模型可忽略，不诬告 tokenizer",
+          (not ok) and "推理型" in srv.health_warn
+          and "tokenizer" not in srv.health_warn,
+          srv.health_warn[:80])
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
                t11_download, t12_ui_call, t13_vendor, t14_prompt_extra,
-               t15_hint_block):
+               t15_hint_block, t16_prompt_cache, t17_ledger,
+               t18_glossary_layers, t19_atomic_split, t20_verify_switch,
+               t21_self_check):
         try:
             fn()
         except Exception as e:

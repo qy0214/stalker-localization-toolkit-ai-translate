@@ -11,6 +11,7 @@
     python test_share_package.py <share_plugins_dir> <work_plugins_dir>
 """
 
+import glob
 import importlib.util
 import json
 import os
@@ -24,6 +25,12 @@ SHARE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "plugins")
 WORK = sys.argv[2] if len(sys.argv) > 2 else SHARE
 
 RESULTS = []
+SKIPPED = []
+
+
+def skip(name, why):
+    SKIPPED.append((name, why))
+    print("SKIP %s  |  %s" % (name, why))
 
 
 def check(name, ok, detail=""):
@@ -56,7 +63,7 @@ print("   文件清单:", files)
 EXPECT = {"ai_translate.py",
           os.path.join("ai_translate_assets", "xray_pkg.zip"),
           os.path.join("ai_translate_assets", "stalker_termbase.json"),
-          os.path.join("ai_translate_assets", "glossary_user.json")}
+          os.path.join("ai_translate_assets", "glossary_builtin.json")}
 check("A1 只含插件+必需解析器+术语数据（无模型/运行库/配置/日志）",
       set(files) == EXPECT, str(sorted(set(files) ^ EXPECT) or files))
 
@@ -81,7 +88,7 @@ check("A3c 默认配置里没有预置的具体目录（全为空/False/空表�
       "DEFAULT_CONFIG 无盘符路径")
 
 # 术语数据文件是随包内容（用户确认要带），不算"本机设置"；要防的是 config.json
-DATA_JSON = {os.path.join("ai_translate_assets", "glossary_user.json"),
+DATA_JSON = {os.path.join("ai_translate_assets", "glossary_builtin.json"),
              os.path.join("ai_translate_assets", "stalker_termbase.json")}
 extra_json = [f for f in files if f.endswith(".json") and f not in DATA_JSON]
 check("A4 不带本机设置文件（无 config.json，只有术语数据）",
@@ -185,20 +192,40 @@ check("C1 插件目录只读时自动改用 %LOCALAPPDATA%（不崩、不写只�
 check("C2 只读场景下解析器仍能加载（读只读位置是允许的）",
       mod_ro._load_vendor() is not None)
 
-# ---------------------------------------------------------------- D 功能一致性
-print("\n--- D 干净包与工作副本功能一致 ---")
-a = open(os.path.join(SHARE, "ai_translate.py"), encoding="utf-8-sig").read()
-b = open(os.path.join(WORK, "ai_translate.py"), encoding="utf-8-sig").read()
-check("D1 分享包代码与工作副本逐字节一致", a == b)
+# ---------------------------------------------------------------- D 发布包一致性
+print("\n--- D 发布包与分享目录一致 ---")
 check("A6 分享包无任何运行产物（bin/models/logs/downloads/__pycache__）",
       not any(os.path.isdir(os.path.join(SHARE, "ai_translate_assets", d))
               for d in ("bin", "models", "logs", "downloads"))
       and not any("__pycache__" in r for r, _d, _f in os.walk(SHARE)))
-check("D2 两者的 PLUGIN_INFO 版本一致",
-      mod_share.PLUGIN_INFO == mod_cold.PLUGIN_INFO,
-      mod_share.PLUGIN_INFO.get("version", "?"))
 
-# 关键算法在干净包上照样工作（抽样：编码链/术语索引/术语表摊平）
+# 1.6.0 之前这里比较 SHARE 与 WORK，而 WORK 默认就等于 SHARE ——
+# 同一个文件和它自己比，永远通过。现在改为：dist/ 里的发布 zip 必须与
+# 分享目录逐字节一致；没有 zip 时明确 SKIP，不再伪装成通过。
+zips = sorted(glob.glob(os.path.join(ROOT, "dist", "ai_translate_plugin_*.zip")))
+if not zips:
+    skip("D1 发布 zip == 分享目录", "dist/ 下没有 ai_translate_plugin_*.zip")
+    skip("D2 插件版本 == zip 文件名版本", "同上")
+else:
+    import zipfile
+    zp = zips[-1]
+    with zipfile.ZipFile(zp) as z:
+        names = [n for n in z.namelist() if not n.endswith("/")]
+        disk_names = {"plugins/" + f.replace(os.sep, "/") for f in files}
+        check("D1a zip 条目 == 分享目录文件", set(names) == disk_names,
+              "差异：%s" % (sorted(set(names) ^ disk_names)[:4] or "无"))
+        diffs = []
+        for n in names:
+            disk = os.path.join(SHARE, n[len("plugins/"):])
+            if not os.path.isfile(disk) or z.read(n) != open(disk, "rb").read():
+                diffs.append(n)
+        check("D1b zip 内容 == 分享目录（逐字节）", not diffs, str(diffs[:4]))
+    ver = mod_share.PLUGIN_INFO.get("version", "")
+    check("D2 插件版本 == zip 文件名版本",
+          bool(ver) and ("v%s" % ver) in os.path.basename(zp),
+          "%s / %s" % (ver, os.path.basename(zp)))
+
+# 关键算法在干净包上照样工作（抽样：编码链/术语索引/术语表摊平/随包术语）
 zh = "潜行者，去酒吧找一个神器。"
 g = {"神器": "神器", "Now": "现在", "Сталкер": "潜行者"}
 idx = mod_share.GlossaryIndex(g)
@@ -209,13 +236,17 @@ check("D4 术语索引在干净包上可命中中文术语",
 check("D5 术语表摊平保留混合表两侧",
       mod_share.flatten_glossary({"a": "b", "分类": {"x": "y"}})
       == {"a": "b", "x": "y"})
+check("D6 随包术语层可加载（>= 8000 条）",
+      len(mod_share.load_builtin_glossary()) >= 8000,
+      "%d 条" % len(mod_share.load_builtin_glossary()))
 
 shutil.rmtree(tmp, ignore_errors=True)
 
 total = len(RESULTS)
 passed = sum(1 for _, ok, _ in RESULTS if ok)
 print("\n" + "=" * 78)
-print("总计 %d 项：通过 %d，失败 %d" % (total, passed, total - passed))
+print("总计 %d 项：通过 %d，失败 %d，跳过 %d"
+      % (total, passed, total - passed, len(SKIPPED)))
 for name, ok, detail in RESULTS:
     if not ok:
         print("  FAIL:", name, detail)

@@ -14,6 +14,8 @@ plugins/ai_translate_assets/models/
 plugins/ai_translate_assets/logs/
 plugins/ai_translate_assets/downloads/
 plugins/ai_translate_assets/config.json
+# 用户术语覆盖层：运行时生成，不属于随包内容
+plugins/ai_translate_assets/glossary_user.json
 plugins/ai_translate_assets/*.bak
 
 # 术语构建原始语料 / 词典（仅本地保留，不随公开仓库分发）

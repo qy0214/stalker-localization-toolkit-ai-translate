@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.5.1.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.6.1.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.5.1.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.6.1.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.5.1"
+EXPECTED_PLUGIN_VERSION = "1.6.1"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
@@ -74,7 +74,7 @@ HISTORICAL_EXE = {
 
 ZIP_ENTRIES = {
     "plugins/ai_translate.py",
-    "plugins/ai_translate_assets/glossary_user.json",
+    "plugins/ai_translate_assets/glossary_builtin.json",
     "plugins/ai_translate_assets/stalker_termbase.json",
     "plugins/ai_translate_assets/xray_pkg.zip",
 }
@@ -244,7 +244,8 @@ def build_manifest() -> dict[str, Any]:
     artifacts = [
         artifact("插件分享副本", PLUGIN, "纯标准库，保留必要安全说明"),
         artifact("插件发布 zip", ZIP, "当前发布包"),
-        artifact("术语库（扁平）", ASSETS / "glossary_user.json", "运行时匹配"),
+        artifact("术语库（随包，只读）", ASSETS / "glossary_builtin.json",
+             "运行时匹配的内置层"),
         artifact("术语基表（分类）", ASSETS / "stalker_termbase.json", "导入用"),
         artifact("X-Ray 解析器", ASSETS / "xray_pkg.zip", "解析 XML/LTX/脚本"),
         artifact("使用说明", USAGE, "含发布包 SHA-256"),
@@ -306,7 +307,7 @@ def build_manifest() -> dict[str, Any]:
             same = True
             details = []
             for rel in ("plugins/ai_translate.py",
-                        "plugins/ai_translate_assets/glossary_user.json",
+                        "plugins/ai_translate_assets/glossary_builtin.json",
                         "plugins/ai_translate_assets/stalker_termbase.json",
                         "plugins/ai_translate_assets/xray_pkg.zip"):
                 try:
@@ -365,27 +366,46 @@ def build_manifest() -> dict[str, Any]:
     checks.append(check("无绝对路径/用户名泄漏", not leak,
                         "发现：%s" % leak if leak else "未发现"))
 
-    # 术语规模
-    glossary_count = json_count(ASSETS / "glossary_user.json")
-    termbase_count = json_count(ASSETS / "stalker_termbase.json", "total_entries")
+    # 术语规模：**必须按实际分类求和**再和 _meta 比。
+    # 旧实现两边都取自同一个 _meta 块，等于自己和自己比，永远绿 ——
+    # 线上文件实际 8246 条、_meta 停在 8208 时，19 项检查照样全过。
+    glossary_count = json_count(ASSETS / "glossary_builtin.json")
+    termbase_path = ASSETS / "stalker_termbase.json"
     termbase = {}
     try:
-        termbase = json.loads(read_text(ASSETS / "stalker_termbase.json"))
+        termbase = json.loads(read_text(termbase_path))
     except Exception:
         pass
-    categories = (termbase.get("_meta") or {}).get("categories") or {}
-    category_sum = sum(v for v in categories.values() if isinstance(v, int))
+    actual_cats = {str(k): len(v) for k, v in termbase.items()
+                   if isinstance(v, dict) and not str(k).startswith("_")}
+    actual_sum = sum(actual_cats.values())
+    meta = termbase.get("_meta") if isinstance(termbase.get("_meta"), dict) else {}
+    termbase_count = meta.get("total_entries")
     checks.append(check(
-        "术语基表：total_entries == 分类合计",
-        termbase_count is not None and termbase_count == category_sum,
-        "%s / %s" % (termbase_count, category_sum)))
+        "术语基表：_meta.total_entries == 实际分类合计",
+        isinstance(termbase_count, int) and termbase_count == actual_sum,
+        "meta %s / 实际 %s" % (termbase_count, actual_sum)))
+    meta_cats = meta.get("categories") if isinstance(meta.get("categories"), dict) else {}
     checks.append(check(
-        "术语库：扁平条目 >= 8000", bool(glossary_count and glossary_count >= 8000),
+        "术语基表：_meta.categories == 实际分类条数",
+        meta_cats == actual_cats,
+        "meta 分类数 %d / 实际分类数 %d，差异：%s" % (
+            len(meta_cats), len(actual_cats),
+            sorted(set(meta_cats.items()) ^ set(actual_cats.items()))[:4] or "无")))
+    # README 教用户"重建后复制到 plugins/" —— 若 tools 副本与随包不一致，
+    # 照文档操作会把线上人工修订（补录/定稿译名/PDA 口径）整批回退。
+    tools_tb = ROOT / "tools/stalker_termbase.json"
+    same_tools = tools_tb.is_file() and md5(tools_tb) == md5(termbase_path)
+    checks.append(check(
+        "tools 术语基表 == 随包术语基表", same_tools,
+        "一致" if same_tools else "不一致：按 README 重建会覆盖线上数据"))
+    checks.append(check(
+        "术语库：随包条目 >= 8000", bool(glossary_count and glossary_count >= 8000),
         "%s 条" % glossary_count))
     checks.append(check(
-        "术语库：扁平 >= 分类基表", bool(glossary_count and termbase_count and
-                                          glossary_count >= termbase_count),
-        "%s / %s" % (glossary_count, termbase_count)))
+        "术语库：随包 >= 分类基表", bool(glossary_count and actual_sum and
+                                          glossary_count >= actual_sum),
+        "%s / %s" % (glossary_count, actual_sum)))
 
     # 发布说明包含 exe / zip 哈希
     usage_text = read_text(USAGE) if USAGE.is_file() else ""
@@ -399,11 +419,12 @@ def build_manifest() -> dict[str, Any]:
         "使用说明含插件版本", ("ai_translate %s" % version) in usage_text,
         "ai_translate %s" % version))
 
-    # 旧包不应留在 dist
+    # dist 里只能有当前版本的 zip
+    stale_zips = sorted(p.name for p in (ROOT / "dist").glob(
+        "ai_translate_plugin_*.zip") if p != ZIP)
     checks.append(check(
-        "dist 不含旧版 v1.5.0 zip",
-        not (ROOT / "dist/ai_translate_plugin_v1.5.0.zip").exists(),
-        "已移除" if not (ROOT / "dist/ai_translate_plugin_v1.5.0.zip").exists() else "仍存在"))
+        "dist 只保留当前版本 zip", not stale_zips,
+        ("多余：%s" % stale_zips) if stale_zips else "仅当前版本"))
 
     # 存储相关（只列插件资产，不扫描整个仓库）
     storage_specs = [
@@ -456,9 +477,10 @@ def build_manifest() -> dict[str, Any]:
         },
         "consistency": checks,
         "term_data": {
-            "glossary_user_entries": glossary_count,
-            "termbase_entries": termbase_count,
-            "termbase_categories": categories,
+            "glossary_entries": glossary_count,
+            "termbase_entries": actual_sum,
+            "termbase_categories": actual_cats,
+            "termbase_meta_total": termbase_count,
         },
         "storage": storage,
         "historical_exe": HISTORICAL_EXE,
@@ -538,8 +560,8 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.append("")
     lines.append("| 文件 | 条目 |")
     lines.append("|---|---:|")
-    lines.append("| `glossary_user.json`（运行时匹配） | %s |" % (
-        data["term_data"]["glossary_user_entries"] or "—"))
+    lines.append("| `glossary_builtin.json`（随包，运行时匹配） | %s |" % (
+        data["term_data"]["glossary_entries"] or "—"))
     lines.append("| `stalker_termbase.json`（分类导入） | %s |" % (
         data["term_data"]["termbase_entries"] or "—"))
     lines.append("")
@@ -567,7 +589,7 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.append("")
     lines.append("```powershell")
     lines.append("# 校验当前插件 zip")
-    lines.append("Get-FileHash 'dist\\ai_translate_plugin_v1.5.1.zip' -Algorithm SHA256")
+    lines.append("Get-FileHash 'dist\\%s' -Algorithm SHA256" % ZIP.name)
     lines.append("")
     lines.append("# 重新生成清单")
     lines.append("python tools/gen_release_manifest.py")
@@ -583,10 +605,38 @@ def render_markdown(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def compare_with_committed(data: dict[str, Any]) -> list[str]:
+    """与已提交的 release_manifest.json 比对（忽略生成时间与 git 元信息）。"""
+    if not OUT_JSON.is_file():
+        return ["release_manifest.json 不存在"]
+    try:
+        old = json.loads(read_text(OUT_JSON))
+    except Exception as e:
+        return ["release_manifest.json 无法解析：%s" % e]
+    keys = ("versions", "artifacts", "zip", "official_hashes", "term_data")
+    return [k for k in keys if data.get(k) != old.get(k)]
+
+
 def main() -> int:
     if not PLUGIN.is_file():
         print("找不到插件：%s" % PLUGIN, file=sys.stderr)
         return 2
+    if "--check" in sys.argv:
+        # CI 门禁：只校验、不写文件。生成时间每次不同，因此不做整文件 diff；
+        # 只比对实质内容（版本/产物哈希/zip/官哈希/术语规模）。
+        data = build_manifest()
+        bad = [c for c in data["consistency"] if c["ok"] is False]
+        diffs = compare_with_committed(data)
+        print("一致性：%d 项检查，%d 项不一致"
+              % (len(data["consistency"]), len(bad)))
+        for c in bad:
+            print("  - %s：%s" % (c["check"], c["detail"]))
+        if diffs:
+            print("与已提交清单不一致：%s（请重新生成并提交）"
+                  % ", ".join(diffs))
+        ok = not bad and not diffs
+        print("check:", "OK" if ok else "FAIL")
+        return 0 if ok else 1
     data = build_manifest()
     OUT_MD.write_text(render_markdown(data), encoding="utf-8", newline="\n")
     OUT_JSON.write_text(
