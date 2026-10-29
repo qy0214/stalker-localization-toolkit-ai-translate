@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-10-29T23:14:55+08:00",
+  "generated_at": "2026-10-29T23:37:19+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "62f0625",
+    "commit": "34e767e",
     "single_commit": false,
     "dirty": false,
     "dirty_files": []
   },
   "versions": {
-    "plugin_version": "1.6.3",
-    "expected_plugin_version": "1.6.3",
+    "plugin_version": "1.7.0",
+    "expected_plugin_version": "1.7.0",
     "target_toolkit": "STALKER Localization Toolkit 1.1.0",
     "historical_exe_version": "1.1.0.0"
   },
@@ -20,16 +20,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 185790,
-      "sha256": "fd097f79f117c5080414c7ee4d854322f65645d5f96ddcec4c95a4e36c40a77b",
+      "size": 190913,
+      "sha256": "f4daed6a3aa774298eaaa84648e8216d43a6c4e2661f2ac7a870d5d652a9ea05",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
-      "path": "dist\\ai_translate_plugin_v1.6.3.zip",
+      "path": "dist\\ai_translate_plugin_v1.7.0.zip",
       "exists": true,
-      "size": 274435,
-      "sha256": "1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02",
+      "size": 276227,
+      "sha256": "5eab029c23411f2d8a5c641d5f7bdc2b834fdc629e2d3befbe0769bd68ee3fcf",
       "note": "当前发布包"
     },
     {
@@ -68,8 +68,8 @@
       "role": "使用说明",
       "path": "使用说明.txt",
       "exists": true,
-      "size": 17054,
-      "sha256": "ee0ed5b1170da12aa0f97bfc3e5ece59340d49ce76b8eae8eda111087e51e4bc",
+      "size": 17812,
+      "sha256": "03e71b5d308c98fe5db327fda74b084fde0e05e28053cd71b2336906000868fb",
       "note": "含发布包 SHA-256"
     },
     {
@@ -98,8 +98,8 @@
     }
   ],
   "zip": {
-    "path": "dist\\ai_translate_plugin_v1.6.3.zip",
-    "sha256": "1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02",
+    "path": "dist\\ai_translate_plugin_v1.7.0.zip",
+    "sha256": "5eab029c23411f2d8a5c641d5f7bdc2b834fdc629e2d3befbe0769bd68ee3fcf",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -125,6 +125,14 @@
       "cudart-12.4": {
         "file": "cudart-llama-bin-win-cuda-12.4-x64.zip",
         "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+      },
+      "cuda-13.4": {
+        "file": "llama-b11612-bin-win-cuda-13.4-x64.zip",
+        "sha256": "e1c59ee10ead069dee12bf5a1f5a3ed294b144ea3f9c5006aa89675c5306de38"
+      },
+      "cudart-13.4": {
+        "file": "cudart-llama-bin-win-cuda-13.4-x64.zip",
+        "sha256": "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668"
       }
     },
     "models": {
@@ -151,12 +159,12 @@
     {
       "check": "插件版本 == 预期",
       "ok": true,
-      "detail": "PLUGIN_INFO 1.6.3 / 预期 1.6.3"
+      "detail": "PLUGIN_INFO 1.7.0 / 预期 1.7.0"
     },
     {
       "check": "zip 文件名含插件版本",
       "ok": true,
-      "detail": "ai_translate_plugin_v1.6.3.zip"
+      "detail": "ai_translate_plugin_v1.7.0.zip"
     },
     {
       "check": "zip 条目 == 5 个预期文件",
@@ -174,9 +182,9 @@
       "detail": "全部一致"
     },
     {
-      "check": "官方哈希：llama.cpp 4 项",
+      "check": "官方哈希：llama.cpp 6 项",
       "ok": true,
-      "detail": "登记 4 项；不一致：无"
+      "detail": "登记 6 项；不一致：无"
     },
     {
       "check": "官方哈希：模型 3 项",
@@ -184,9 +192,9 @@
       "detail": "登记 3 项；不一致：无"
     },
     {
-      "check": "官方哈希：7 个合法 SHA-256",
+      "check": "官方哈希：9 个合法 SHA-256",
       "ok": true,
-      "detail": "7 个"
+      "detail": "9 个"
     },
     {
       "check": "官方哈希：llama.cpp 标签 b11612",
@@ -236,12 +244,12 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "1d24cefb43949562…"
+      "detail": "5eab029c23411f2d…"
     },
     {
       "check": "使用说明含插件版本",
       "ok": true,
-      "detail": "ai_translate 1.6.3"
+      "detail": "ai_translate 1.7.0"
     },
     {
       "check": "dist 只保留当前版本 zip",
@@ -308,6 +316,6 @@
   },
   "tracked": {
     "files": 29,
-    "bytes": 17863170
+    "bytes": 17877958
   }
 }
