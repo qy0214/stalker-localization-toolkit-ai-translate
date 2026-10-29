@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-29T22:17:46+08:00",
+  "generated_at": "2026-10-29T22:30:42+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "1a5a21e",
+    "commit": "b42c2db",
     "single_commit": false,
     "dirty": false,
     "dirty_files": []
@@ -298,7 +298,7 @@
     "note": "2026-10-23 清单记录；文件已在清理中移除"
   },
   "tracked": {
-    "files": 22,
-    "bytes": 1606087
+    "files": 27,
+    "bytes": 17852380
   }
 }
