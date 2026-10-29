@@ -45,7 +45,7 @@ STALKER Localization Toolkit 1.1.0\
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `dist/ai_translate_plugin_v1.6.1.zip` | 可直接分发的插件包 |
 | `tests/` | 100 项回归测试 + 分享包卫生测试 |
-| `tools/` | 术语库构建脚本 + 发布清单生成器（原始语料不入公开仓库） |
+| `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
@@ -106,8 +106,10 @@ python build_glossary.py
 python build_termbase.py
 ```
 
-原始语料 `raw_pairs.json`、词典和人工词表**不随公开仓库分发**，只保留在本地；
-需要重建时按 [`tools/README.md`](tools/README.md) 放回 `tools/`。生成后的
+术语构建的全部输入（`raw_pairs.json`、三本词典、人工三语表）都随仓库分发，
+位于 `tools/`，检出后可直接重建；文件清单与用法见
+[`tools/README.md`](tools/README.md)。这些文件包含《S.T.A.L.K.E.R.》游戏/模组
+原文，权利归原权利人，收录仅用于构建本项目术语库。生成后的
 `stalker_termbase.json` 可复制到 `plugins/ai_translate_assets/`（发布清单会
 校验 `tools/` 与随包副本一致，避免按文档重建时把线上修订回退）。
 

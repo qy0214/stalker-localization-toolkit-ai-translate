@@ -22,3 +22,6 @@
 *.tar.gz binary
 *.7z binary
 *.rar binary
+
+# 术语构建语料：保留原始字节，避免换行转换；不展示逐行 diff
+tools/raw_pairs.json -text -diff

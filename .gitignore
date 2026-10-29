@@ -18,12 +18,6 @@ plugins/ai_translate_assets/config.json
 plugins/ai_translate_assets/glossary_user.json
 plugins/ai_translate_assets/*.bak
 
-# 术语构建原始语料 / 词典（仅本地保留，不随公开仓库分发）
-tools/raw_pairs.json
-tools/dict_ns_ogsr_*.json
-tools/dict_current_*.json
-tools/新建 文字文件.txt
-
 # 模型 / 运行库 / 压缩包
 *.gguf
 *.tar.gz

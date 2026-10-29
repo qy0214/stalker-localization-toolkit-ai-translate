@@ -1,25 +1,29 @@
 # 术语库构建工具
 
-本目录的脚本用于从原始对齐语料重建术语表。**原始语料与词典不随公开仓库分发**，
-只保留在本地，以避免再分发游戏文本。
+本目录的脚本用于从原始对齐语料重建术语表。
 
-公开仓库包含：
+## 输入（随仓库分发）
+
+```text
+raw_pairs.json                 俄/英↔简中 对齐语料（约 15.5 MB）
+dict_ns_ogsr_rus-chs.json      俄→简中词典
+dict_ns_ogsr_eng-chs.json      英→简中词典
+dict_current_2026-06-21.json   旧版人工词表（legacy）
+新建 文字文件.txt              人工三语分类表
+```
+
+> 这些文件包含《S.T.A.L.K.E.R.》游戏/模组原文，权利归原权利人所有；
+> 收录在此仅用于构建本项目术语库，不代表对其再分发授权。
+
+## 脚本
 
 - `build_glossary.py`：从 `raw_pairs.json` 生成俄/英词典
 - `build_termbase.py`：合并语料、词典与人工词表，生成分类术语库
 - `stalker_termbase.json`：已生成的分类术语库（同时随插件分发）
 
-本地重建时，请把以下文件放回 `tools/`（这些文件名已加入 `.gitignore`）：
+## 重建
 
-```text
-raw_pairs.json
-dict_ns_ogsr_rus-chs.json
-dict_ns_ogsr_eng-chs.json
-dict_current_2026-06-21.json
-新建 文字文件.txt
-```
-
-然后运行：
+在仓库根目录运行：
 
 ```powershell
 cd tools

@@ -1,0 +1,148 @@
+1. 阵营与组织
+英文	俄语	中文	备注
+Duty	Долг	责任	阵营
+Freedom	Свобода	自由	阵营
+Clear Sky	Чистое небо	晴空	阵营
+Monolith	Монолит	巨石	阵营/神器
+Last Day	Последний день	最后一日	阵营
+Bandits	Бандиты	匪徒	阵营
+Mercenaries	Наёмники	雇佣兵	阵营
+Scientists	Учёные	科学家	阵营
+Ecologists	Экологи	生态学家	阵营
+Military	Военные	军方	阵营
+Neutrals	Нейтралы	中立者	阵营
+2. 地点与区域
+英文	俄语	中文	备注
+Zone	Зона	禁区	核心概念
+Cordon	Кордон	封锁线	地点
+Garbage	Свалка	垃圾场	地点
+Agroprom	Агропром	农业研究所	地点
+Dark Valley	Тёмная Долина	黑暗山谷	地点
+Army Warehouses	Армейские Склады	军方仓库	地点
+Pripyat	Припять	普里皮亚季	地点
+CNPP	ЧАЭС	切尔诺贝利核电站	地点
+Sarcophagus	Саркофаг	石棺	地点
+Brain Scorcher	Выжигатель мозгов	大脑烧灼器	地点/装置
+Generators	Генераторы	发电机	地点
+Radar	Радар	雷达	地点
+Yantar	Янтарь	琥珀	地点
+Wild Territory	Дикая Территория	荒野	地点
+Dead City	Мёртвый Город	死城	地点
+Limansk	Лиманск	利曼斯克	地点
+Zaton	Затон	扎通	地点
+Jupiter	Юпитер	朱庇特	地点
+Outskirts	Окраина	郊区	地点
+3. 怪物与变异体
+英文	俄语	中文	备注
+Controller	Контролёр	控制器	怪物
+Chimera	Химера	奇美拉	怪物
+Bloodsucker	Кровосос	吸血怪	怪物
+Snork	Снорк	窒息者	怪物
+Pseudodog	Псевдособака	伪狗	怪物
+Flesh	Плоть	肉块	怪物
+Burer	Бюрер	布鲁尔	怪物
+Librarian	Библиотекарь	图书管理员	怪物
+Pseudogiant	Псевдогигант	伪巨人	怪物
+Tushkano	Тушкано	图什卡诺	怪物
+Zombie	Зомби	僵尸	怪物
+Blind Dog	Слепой пёс	盲犬	怪物
+Boar	Кабан	野猪	怪物
+Rat	Крыса	老鼠	怪物
+4. 人物与绰号
+英文	俄语	中文	备注
+Strelok	Стрелок	神射手/斯特列洛克	主角
+Ghost	Призрак	幽灵	人物
+Fang	Клык	尖牙	人物
+Panther	Пантера	黑豹	人物
+Mukha	Муха	苍蝇	人物
+Klenov	Клёнов	克列诺夫	科学家
+Black Doctor	Чёрный Доктор	黑医生	人物
+Gynecologist	Гинеколог	妇科医生	人物
+Forester	Лесник	护林员	人物
+Hermit	Отшельник	隐士	人物
+Pilgrim	Пилигрим	朝圣者	人物
+Lukash	Лукаш	卢卡什	自由阵营
+Voronin	Воронин	沃罗宁	责任阵营
+Sidorovich	Сидорович	西多罗维奇	商人
+Barman	Бармен	酒保	商人
+Sakharov	Сахаров	萨哈罗夫	科学家
+Semetskiy	Семецкий	谢梅茨基	人物
+Stargazer	Звездочёт	占星家	人物
+Arhara	Архара	阿尔哈拉	人物
+Shurup	Шуруп	螺丝	人物
+Akim	Аким	阿基姆	商人
+Gavr	Гавр	加夫尔	人物
+Boatswain	Боцман	水手长	人物
+Hologram	Голограмма	全息图	人物
+Cyclops	Циклоп	独眼巨人	人物
+Zhora	Жора	若拉	人物
+Shura	Шура	舒拉	人物
+Demob	Дембель	退伍兵	人物
+Kolmogor	Колмогор	科尔莫戈尔	人物
+Lightning	Молния	闪电	人物
+Perfumer	Парфюмер	香水商	人物
+Faint	Обморок	昏厥	匪徒头目
+Duda	Дуда	杜达	守卫头目
+Sanya Tyumensky	Саня Тюменский	萨尼亚·秋明斯基	人物
+Norman	Норман	诺曼	人物
+Sedoy	Седой	灰发	移动商人
+Fritz	Фриц	弗里茨	人物
+Andersen	Андерсен	安徒生	人物
+Salvador	Сольвадор	萨尔瓦多	科学家
+5. 物品与神器
+英文	俄语	中文	备注
+Artifact	Артефакт	神器	通用
+Heart of the Poltergeist	Сердце полтергейста	喧闹鬼之心	神器
+Monolith Shard	Осколок Монолита	巨石碎片	神器
+Mama's Beads	Мамины бусы	妈妈念珠	神器
+Goldfish	Золотая рыбка	金鱼	神器
+Moonlight	Лунный свет	月光	神器
+Night Star	Ночная звезда	夜星	神器
+Wrenched	Выверт	扭曲	神器
+Soul	Душа	灵魂	神器
+Symbion	Симбион	共生体	神器
+Cobblestone	Булыжник	鹅卵石	神器
+Radon Cobblestone	Радоновый булыжник	氡石鹅卵石	神器
+Titanium Kolobok	Титановый колобок	钛圆面包	神器
+Plasma Caterpillar	Плазменная гусеница	等离子毛虫	神器
+Bezoar	Безоар	胃石	材料
+Luck Stone	Камень удачи	幸运石	神器
+Meso-artifact	Мезоартефакт	中观神器	术语
+Isomorph	Изоморф	同形物	术语
+Energy isomorph	Энергетический изоморф	能量同形物	术语
+6. 武器与装备
+英文	俄语	中文	备注
+Gauss rifle	Гаусс-винтовка	高斯步枪	武器
+Vintorez	Винторез	螺纹切削	武器
+Groza	Гроза	雷暴	武器
+Exoskeleton	Экзоскелет	外骨骼	装备
+Anomalous Val	Аномальный Вал	异常“瓦尔”	武器
+Anomalous Bizon	Аномальный Бизон	异常“野牛”	武器
+Anomalous Colt	Аномальный Кольт	异常“柯尔特”	武器
+Anomalous Abakan	Аномальный Абакан	异常“阿巴坎”	武器
+Anomalous M16	Аномальный M16	异常M16	武器
+Anomalous Saiga	Аномальная Сайга	异常“赛加”	武器
+Perfusor	Перфузор	灌注器	设备
+Detector	Детектор	探测器	设备
+Ultra-detector	Ультрадетектор	超级探测器	设备
+Psi-antenna	Пси-антенна	灵能天线	设备
+Teleport	Телепорт	传送门	设备
+Protective field	Защитное поле	防护场	设备
+Chip	Чип	芯片	设备
+PDA	КПК	个人数字助理	设备
+Stash	Тайник	藏匿处	术语
+7. 术语与俚语
+英文	俄语	中文	备注
+Anomaly	Аномалия	异常现象	通用
+Emission	Выброс	排放	事件
+Blowout	Выброс	大爆发	事件
+Mutant	Мутант	变异体	通用
+Zombification	Зомбирование	僵尸化	状态
+Psy-field	Пси-поле	灵能场	术语
+Stalker	Сталкер	潜行者	通用
+Zone	Зона	禁区	通用
+Marauder	Мародёр	拾荒者/掠夺者	俚语
+Newbie	Новичок	新手	俚语
+Master	Мастер	大师	等级
+Art	Арт	神器	简称
+Loot	Хабар	战利品	俚语
