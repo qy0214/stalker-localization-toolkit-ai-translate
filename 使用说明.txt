@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.6.1
+插件版本：ai_translate 1.6.2
 
 
 一、怎么装（30 秒）
@@ -29,14 +29,14 @@ AI 离线翻译插件 · 分享包说明
 工具集 exe（1.1.0 build_60，历史发布物）：
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
-本插件 zip（ai_translate_plugin_v1.6.1.zip）：
-    e4f67a491b28048cc92751f6a2fbbc2626b0cdfeba49eab4d87bda7cd8156b84
+本插件 zip（ai_translate_plugin_v1.6.2.zip）：
+    e78001b892f0dc5590e56727226d1f73620fd49f674a91a908e06266e93d30b0
 
 PowerShell 校验：
-    Get-FileHash .\ai_translate_plugin_v1.6.1.zip -Algorithm SHA256
+    Get-FileHash .\ai_translate_plugin_v1.6.2.zip -Algorithm SHA256
 
 说明：exe 哈希取自清理前生成的发布清单；如果你手上的 exe 不是同一构建，
-请以那次发布清单为准。插件 zip 哈希对应本 1.6.1 分享包。
+请以那次发布清单为准。插件 zip 哈希对应本 1.6.2 分享包。
 插件运行时下载的 llama.cpp 运行库与模型，也会在下载后按发布方官方
 SHA-256 校验（llama.cpp b11612 GitHub Release digest / HuggingFace LFS
 oid）；不一致会删除该文件并自动换源。
@@ -50,6 +50,7 @@ oid）；不一致会删除该文件并自动换源。
     ai_translate_assets\xray_pkg.zip     解析 X-Ray 文本 XML/LTX/脚本所必需
     ai_translate_assets\stalker_termbase.json   术语基表（分类格式，导入用）
     ai_translate_assets\glossary_builtin.json   随包术语库（8246 条，只读）
+    ai_translate_assets\THIRD_PARTY_NOTICES.txt 第三方来源与许可状态（必读）
                                                   用户自己的增删改记在 glossary_user.json（不随包）
 
 以下**都不随包**，因为插件可以自己下，而且换机器、换网络时反而是负担：
@@ -93,7 +94,7 @@ oid）；不一致会删除该文件并自动换源。
 看到告警请换模型，不要硬跑（否则每条文本都会超时）。
 
 
-四点五、1.6.0 / 1.6.1 修了什么（与你直接相关）
+四点五、1.6.0 – 1.6.2 修了什么（与你直接相关）
 ----------------------------------------
 * 「附加提示词」以前实际不生效（后台线程读界面控件会失败并被吞掉）——已修，
   现在填了就会作为「补充要求」追加到内置规则后。
@@ -103,6 +104,9 @@ oid）；不一致会删除该文件并自动换源。
 * 切换模型/上下文时不再卡住界面（停旧引擎移到后台线程）。
 * 下载校验不一致会自动换源；CUDA 运行时要求完整安装，半套解压不再误判为可用。
 * 长文本强制术语模式切分不再切断 $$Tn$$ 占位符。
+* （1.6.2）随包补充第三方来源声明：X-Ray 解析器与翻译流程源自
+  wzyddg/stalker_auto-trans-tool_remake（上游未声明许可证），详见
+  ai_translate_assets\THIRD_PARTY_NOTICES.txt。
 * （1.6.1）启动自检不再误报推理型模型：小预算空输出会先用更大预算复核，
   只有「仍然停不下来」才提示 tokenizer/对话模板有问题。
 
@@ -234,7 +238,18 @@ oid）；不一致会删除该文件并自动换源。
   重跑都会补上。想强制全部重译，删掉输出目录里的 .ai_translate_done.json 即可。
 
 
-八、卸载
+八、第三方来源与致谢
+----------------------
+* X-Ray 解析器（ai_translate_assets\xray_pkg.zip）与翻译流程参考
+  wzyddg/stalker_auto-trans-tool_remake：
+  https://github.com/wzyddg/stalker_auto-trans-tool_remake
+  上游仓库未声明开源许可证（版权归原作者）；随包 THIRD_PARTY_NOTICES.txt 列了
+  哪些文件原样收录、哪些经本地修改。完整说明见仓库根 THIRD_PARTY_NOTICES.md。
+* llama.cpp（MIT）与 Hy-MT 模型（Apache-2.0）不随包分发，运行时按官方哈希下载。
+* 术语库语料含游戏/模组原文，权利归原权利人，仅用于构建术语库。
+
+
+九、卸载
 --------
 删掉 plugins\ai_translate.py 与 plugins\ai_translate_assets\ 即可。
 若曾装在只读位置，额外删除 %LOCALAPPDATA%\STALKER Localization Toolkit\ai_translate。

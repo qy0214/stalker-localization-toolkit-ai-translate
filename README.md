@@ -20,6 +20,7 @@ STALKER Localization Toolkit 1.1.0\
             xray_pkg.zip
             stalker_termbase.json
             glossary_builtin.json
+            THIRD_PARTY_NOTICES.txt
 ```
 
 重启工具集，顶部会出现「AI 翻译」栏目。详细步骤、档位说明和已知限制见
@@ -43,7 +44,8 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate.py` | 插件本体，纯 Python 标准库 |
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
-| `dist/ai_translate_plugin_v1.6.1.zip` | 可直接分发的插件包 |
+| `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
+| `dist/ai_translate_plugin_v1.6.2.zip` | 可直接分发的插件包 |
 | `tests/` | 100 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -51,19 +53,19 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.6.1`
+- 插件版本：`ai_translate 1.6.2`
 - 当前 zip SHA-256：
-  `e4f67a491b28048cc92751f6a2fbbc2626b0cdfeba49eab4d87bda7cd8156b84`
+  `e78001b892f0dc5590e56727226d1f73620fd49f674a91a908e06266e93d30b0`
 - 下载链路官方哈希：llama.cpp `b11612` 的 4 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.6.1.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.6.2.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 / 1.6.1 修复摘要
+## 1.6.0 – 1.6.2 变更摘要
 
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
@@ -81,6 +83,10 @@ Get-FileHash 'dist\ai_translate_plugin_v1.6.1.zip' -Algorithm SHA256
   推理型 GGUF（如 MiniCPM5）会把 16 token 全用在 `reasoning_content` 上、
   `content` 为空；现在先 16 token 快速探测，失败再用 256 token 复核，
   仍不收尾才判为 tokenizer 问题。
+- **1.6.2**：补充第三方来源声明 —— X-Ray 解析器与翻译流程源自
+  [wzyddg/stalker_auto-trans-tool_remake](https://github.com/wzyddg/stalker_auto-trans-tool_remake)
+  （上游未声明许可证），随包附 `THIRD_PARTY_NOTICES.txt`，仓库根附
+  `THIRD_PARTY_NOTICES.md`（含逐文件原样/修改说明）。
 - 发布清单改为**真校验**：术语基表按实际分类求和、新增"tools 副本 == 随包"
   与"dist 只保留当前版本 zip"检查；CI 用 `--check` 做漂移门禁。
 
@@ -125,4 +131,11 @@ python build_termbase.py
 ## 许可
 
 插件随 STALKER Localization Toolkit 分发，采用 **GPL-3.0**，见 [`LICENSE`](LICENSE)。
-llama.cpp 为 MIT；Hy-MT 模型为 Apache-2.0，模型文件不随仓库分发。
+
+第三方来源与许可见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)：
+
+- X-Ray 解析器与翻译流程：源自
+  [wzyddg/stalker_auto-trans-tool_remake](https://github.com/wzyddg/stalker_auto-trans-tool_remake)
+  （上游**未声明许可证**，版权归原作者；本仓库保留来源说明，不主张额外授权）；
+- llama.cpp：MIT；Hy-MT 模型：Apache-2.0；二者均不随仓库分发。
+该 GPL-3.0 许可不改变上述第三方组件的版权与授权状态。

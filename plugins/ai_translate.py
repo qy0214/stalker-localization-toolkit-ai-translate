@@ -10,6 +10,11 @@
 
 纯标准库实现（urllib / threading / subprocess / zipfile），可在工具集的
 PyInstaller 冻结环境（无第三方包）中运行；界面只用 api.ui，Tk / Qt 双后端。
+
+第三方来源：X-Ray 解析器（ai_translate_assets/xray_pkg.zip）与
+翻译流程参考 wzyddg/stalker_auto-trans-tool_remake（上游未声明
+许可证）；详见仓库 THIRD_PARTY_NOTICES.md 与随包
+THIRD_PARTY_NOTICES.txt。
 """
 
 import os
@@ -35,7 +40,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.6.1",
+    "version": "1.6.2",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"

@@ -1,0 +1,20 @@
+本插件包含或参考了第三方成果，版权归其原作者所有。
+
+1) wzyddg/stalker_auto-trans-tool_remake
+   https://github.com/wzyddg/stalker_auto-trans-tool_remake
+   - ai_translate_assets/xray_pkg.zip 内的 X-Ray 解析器：
+     3 个文件原样收录，xmlxReader.py 与 xRayTextAnalyzer.py 经本地修改
+     （标准库 XML 解析、编码候选链、正则与健壮性修复）。
+   - 翻译流程（提取—翻译—回填）参考其 xRayTrans.py；本插件为独立实现。
+   - 上游仓库未声明开源许可证（2026-10-29 检查 license: null），
+     版权归原作者；此处保留来源与作者信息，不主张额外授权。
+
+2) llama.cpp（MIT）与 Hy-MT 模型（Apache-2.0）
+   不随本插件分发，运行时按发布方官方 SHA-256 下载。
+
+3) 术语库语料
+   见仓库 tools/，包含《S.T.A.L.K.E.R.》游戏/模组原文，权利归原权利人，
+   仅用于构建本项目术语库。
+
+完整说明见仓库根目录 THIRD_PARTY_NOTICES.md。
+如你是权利人并希望调整署名或移除相关代码，请通过仓库 issue 联系。

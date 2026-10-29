@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.6.1.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.6.2.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.6.1.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.6.2.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.6.1"
+EXPECTED_PLUGIN_VERSION = "1.6.2"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
@@ -74,6 +74,7 @@ HISTORICAL_EXE = {
 
 ZIP_ENTRIES = {
     "plugins/ai_translate.py",
+    "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
     "plugins/ai_translate_assets/glossary_builtin.json",
     "plugins/ai_translate_assets/stalker_termbase.json",
     "plugins/ai_translate_assets/xray_pkg.zip",
@@ -248,6 +249,8 @@ def build_manifest() -> dict[str, Any]:
              "运行时匹配的内置层"),
         artifact("术语基表（分类）", ASSETS / "stalker_termbase.json", "导入用"),
         artifact("X-Ray 解析器", ASSETS / "xray_pkg.zip", "解析 XML/LTX/脚本"),
+        artifact("第三方来源声明", ASSETS / "THIRD_PARTY_NOTICES.txt",
+                 "随包分发（上游来源与许可状态）"),
         artifact("使用说明", USAGE, "含发布包 SHA-256"),
         artifact("术语库处理记录", TERM_DOC, "术语口径与修剪记录"),
         artifact("大小写冲突清单", CASE_DOC, "术语大小写冲突处理"),
@@ -292,7 +295,7 @@ def build_manifest() -> dict[str, Any]:
 
     # zip 内容
     checks.append(check(
-        "zip 条目 == 4 个预期文件", set(zip_entries) == ZIP_ENTRIES,
+        "zip 条目 == 5 个预期文件", set(zip_entries) == ZIP_ENTRIES,
         "多出：%s；缺少：%s" % (
             sorted(set(zip_entries) - ZIP_ENTRIES) or "无",
             sorted(ZIP_ENTRIES - set(zip_entries)) or "无")))
@@ -307,6 +310,7 @@ def build_manifest() -> dict[str, Any]:
             same = True
             details = []
             for rel in ("plugins/ai_translate.py",
+                        "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
                         "plugins/ai_translate_assets/glossary_builtin.json",
                         "plugins/ai_translate_assets/stalker_termbase.json",
                         "plugins/ai_translate_assets/xray_pkg.zip"):

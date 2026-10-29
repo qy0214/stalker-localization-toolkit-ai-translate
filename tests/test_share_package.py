@@ -61,10 +61,11 @@ for root, _d, fs in os.walk(SHARE):
 files.sort()
 print("   文件清单:", files)
 EXPECT = {"ai_translate.py",
+          os.path.join("ai_translate_assets", "THIRD_PARTY_NOTICES.txt"),
           os.path.join("ai_translate_assets", "xray_pkg.zip"),
           os.path.join("ai_translate_assets", "stalker_termbase.json"),
           os.path.join("ai_translate_assets", "glossary_builtin.json")}
-check("A1 只含插件+必需解析器+术语数据（无模型/运行库/配置/日志）",
+check("A1 只含插件+解析器+术语数据+来源声明（无模型/运行库/配置/日志）",
       set(files) == EXPECT, str(sorted(set(files) ^ EXPECT) or files))
 
 size = sum(os.path.getsize(os.path.join(SHARE, f)) for f in files)
