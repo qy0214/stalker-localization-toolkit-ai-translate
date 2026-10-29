@@ -55,7 +55,7 @@ STALKER Localization Toolkit 1.1.0\
 
 - 插件版本：`ai_translate 1.7.4`
 - 当前 zip SHA-256：
-  `24f202054410ae3a92ec3da0389de57fbc24afc5f3f38bd673a5f9ac71a0f938`
+  `3fc74e39ef7472892ad209e9c6130b8bb6ac3461304434615112f33e48e1c871`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 

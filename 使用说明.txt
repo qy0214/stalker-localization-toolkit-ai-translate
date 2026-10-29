@@ -30,7 +30,7 @@ AI 离线翻译插件 · 分享包说明
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
 本插件 zip（ai_translate_plugin_v1.7.4.zip）：
-    24f202054410ae3a92ec3da0389de57fbc24afc5f3f38bd673a5f9ac71a0f938
+    3fc74e39ef7472892ad209e9c6130b8bb6ac3461304434615112f33e48e1c871
 
 PowerShell 校验：
     Get-FileHash .\ai_translate_plugin_v1.7.4.zip -Algorithm SHA256
