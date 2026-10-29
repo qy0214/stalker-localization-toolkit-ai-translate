@@ -45,27 +45,27 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.6.2.zip` | 可直接分发的插件包 |
-| `tests/` | 100 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.6.3.zip` | 可直接分发的插件包 |
+| `tests/` | 103 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.6.2`
+- 插件版本：`ai_translate 1.6.3`
 - 当前 zip SHA-256：
-  `e78001b892f0dc5590e56727226d1f73620fd49f674a91a908e06266e93d30b0`
+  `1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02`
 - 下载链路官方哈希：llama.cpp `b11612` 的 4 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.6.2.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.6.3.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.6.2 变更摘要
+## 1.6.0 – 1.6.3 变更摘要
 
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
@@ -87,13 +87,17 @@ Get-FileHash 'dist\ai_translate_plugin_v1.6.2.zip' -Algorithm SHA256
   [wzyddg/stalker_auto-trans-tool_remake](https://github.com/wzyddg/stalker_auto-trans-tool_remake)
   （上游未声明许可证），随包附 `THIRD_PARTY_NOTICES.txt`，仓库根附
   `THIRD_PARTY_NOTICES.md`（含逐文件原样/修改说明）。
+- **1.6.3**：补充实测可用的下载源 —— 运行库新增 4 个 GitHub 加速代理
+  （gh-proxy.org / gh.nxnow / gh.catmak / gh.monlor），模型新增
+  hf-mirror.net 与 ModelScope 的 download 端点；**原有源全部保留**，
+  作为不同地区/运营商的备援，下载前逐个测速择优。
 - 发布清单改为**真校验**：术语基表按实际分类求和、新增"tools 副本 == 随包"
   与"dist 只保留当前版本 zip"检查；CI 用 `--check` 做漂移门禁。
 
 ## 开发与测试
 
 ```powershell
-# 100 项回归测试
+# 103 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性

@@ -1199,13 +1199,34 @@ def t21_self_check():
 
 
 # ----------------------------------------------------------------------
+# T22 下载源清单（多网络备援，不删除原有源）
+# ----------------------------------------------------------------------
+def t22_sources():
+    print()
+    print("--- T22 下载源清单 ---")
+    gh = ait._gh_sources(ait._GH_BASE.format(variant="cpu"))
+    check("T22-1 运行库源 >= 20 且全部 https",
+          len(gh) >= 20 and all(u.startswith("https://") for _, u in gh),
+          "%d 个" % len(gh))
+    names = [n for n, _ in gh]
+    check("T22-2 源名称唯一（下拉框可区分）",
+          len(names) == len(set(names)))
+    ms = ait._model_sources("Tencent-Hunyuan/X", "tencent/X", "x.gguf")
+    check("T22-3 模型源含 ModelScope 与两个 hf-mirror 域名",
+          any("modelscope.cn" in u for _, u in ms)
+          and any("hf-mirror.com" in u for _, u in ms)
+          and any("hf-mirror.net" in u for _, u in ms),
+          "%d 个" % len(ms))
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
                t11_download, t12_ui_call, t13_vendor, t14_prompt_extra,
                t15_hint_block, t16_prompt_cache, t17_ledger,
                t18_glossary_layers, t19_atomic_split, t20_verify_switch,
-               t21_self_check):
+               t21_self_check, t22_sources):
         try:
             fn()
         except Exception as e:

@@ -40,7 +40,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.6.2",
+    "version": "1.6.3",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -236,6 +236,11 @@ _GH_PROXIES = [
     ("ghproxy.cc 代理", "https://ghproxy.cc/{url}"),
     ("960316 代理", "https://gh.960316.xyz/{url}"),
     ("99988866 代理", "https://gh.api.99988866.xyz/{url}"),
+    # 2026-10-29 实测可用（不同网络下可用性会变；插件逐个测速择优）
+    ("gh-proxy.org 代理", "https://gh-proxy.org/{url}"),
+    ("gh.nxnow 代理", "https://gh.nxnow.top/{url}"),
+    ("catmak 代理", "https://gh.catmak.name/{url}"),
+    ("monlor 代理", "https://gh.monlor.com/{url}"),
 ]
 _GH_DOMAIN_MIRRORS = [
     ("kkgithub 域名镜像", "https://kkgithub.com/{path}"),
@@ -263,8 +268,13 @@ def _model_sources(repo_ms, repo_hf, filename):
         ("ModelScope CDN(www)",
          "https://www.modelscope.cn/api/v1/models/%s/repo?Revision=master"
          "&FilePath=%s" % (repo_ms, filename)),
+        ("ModelScope CDN(download)",
+         "https://modelscope.cn/api/v1/models/%s/repo?Revision=master"
+         "&FilePath=%s&download=true" % (repo_ms, filename)),
         ("hf-mirror（HF 国内镜像）",
          "https://hf-mirror.com/%s/resolve/main/%s" % (repo_hf, filename)),
+        ("hf-mirror.net（HF 国内镜像 2）",
+         "https://hf-mirror.net/%s/resolve/main/%s" % (repo_hf, filename)),
         ("HuggingFace 官方",
          "https://huggingface.co/%s/resolve/main/%s" % (repo_hf, filename)),
         ("HuggingFace 官方(hf.co)",
