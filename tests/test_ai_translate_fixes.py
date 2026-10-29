@@ -1617,6 +1617,228 @@ def t34_engine_mem_and_slow_log():
 
 
 # ----------------------------------------------------------------------
+# T35 ID 引用层：自动解析、原地更新、引用层原样复制
+# ----------------------------------------------------------------------
+class _FakeServer:
+    ctx_size = 16384
+
+    def __init__(self, fn=None):
+        self.calls = []
+        self.fn = fn
+
+    def is_running(self):
+        return True
+
+    def translate(self, text, src, tgt, glossary_hits=None,
+                  timeout_sec=180, max_tokens=None, use_extra=True):
+        self.calls.append(text)
+        if self.fn is not None:
+            return self.fn(text)
+        return "译[" + text + "]"
+
+
+def _ref_tree():
+    root = tempfile.mkdtemp(prefix="ait_ref_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    os.makedirs(os.path.join(ind, "configs", "gameplay"))
+    os.makedirs(os.path.join(ind, "scripts"))
+
+    def w(rel, s):
+        path = os.path.join(ind, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with io.open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(s)
+
+    w(os.path.join("configs", "text", "rus", "table.xml"), """<string_table>
+ <string id="dlg_1"><text>Привет, сталкер.</text></string>
+ <string id="gen_1"><text>Ещё текст.</text></string>
+ <string id="zh_1"><text>已经有中文</text></string>
+ <string id="var_1"><text>$level $name 潜行者。</text></string>
+ <string id="name_1"><text>M57</text></string>
+ <string id="title_1"><text>Artist:Title</text></string>
+ <string id="pct_1"><text>Привет, $name! Урон %s.</text></string>
+</string_table>""")
+    w(os.path.join("configs", "localization.ltx"),
+      "[string_table]\nlanguage = rus\nfiles = table\n")
+    w(os.path.join("configs", "gameplay", "test.xml"),
+      "<game><text>dlg_1</text><text>gen_1</text></game>")
+    w(os.path.join("scripts", "test.script"),
+      'game.translate_string("dlg_1")\n')
+    return root, ind, out
+
+
+def _run_ref_job(ait, ind, out, server, **kw):
+    logs = []
+    preview = kw.pop("preview_reference", False)
+    job = ait.TranslationJob(
+        ait._load_vendor(), server, ind, "auto", "auto", "chs",
+        out_dir=out,
+        log=lambda m, tag="info": logs.append(m),
+        detail=lambda m, tag="info": None,
+        reference_mode=True, copy_reference=True, only_referenced=False,
+        protect_proper=True, preview_reference=preview, **kw)
+    ok = job.run()
+    return job, ok, logs
+
+
+def t35_reference_layer():
+    print()
+    print("--- T35 ID 引用层 ---")
+    root, ind, out = _ref_tree()
+    srv = _FakeServer()
+    try:
+        job, ok, logs = _run_ref_job(ait, ind, out, srv)
+        text = io.open(os.path.join(out, "configs", "text", "rus",
+                                    "table.xml"), encoding="utf-8").read()
+        check("T35-1 引用层自动解析并完成", ok)
+        check("T35-2 被引用的俄文条目译成中文",
+              "译[Привет, сталкер.]" in text)
+        check("T35-3 未被引用的俄文条目也译（默认不限制引用）",
+              "译[Ещё текст.]" in text)
+        check("T35-4 已中文条目不再送翻",
+              "<text>已经有中文</text>" in text
+              and "已经有中文" not in srv.calls)
+        check("T35-5 含 $var 的中文条目不再送翻（修 100 条损坏）",
+              "$level $name 潜行者。" in text
+              and not any("$level" in c for c in srv.calls))
+        check("T35-6 占位符 $name / %s 原样保留",
+              "$name" in text and "%s" in text)
+        check("T35-7 代号/歌名受保护，不送翻",
+              "<text>M57</text>" in text and "<text>Artist:Title</text>" in text)
+        check("T35-8 XML/脚本/注册表原样复制",
+              io.open(os.path.join(out, "configs", "gameplay", "test.xml"),
+                      encoding="utf-8").read()
+              == io.open(os.path.join(ind, "configs", "gameplay", "test.xml"),
+                         encoding="utf-8").read()
+              and io.open(os.path.join(out, "scripts", "test.script"),
+                          encoding="utf-8").read()
+              == io.open(os.path.join(ind, "scripts", "test.script"),
+                         encoding="utf-8").read()
+              and os.path.isfile(os.path.join(out, "configs",
+                                              "localization.ltx")))
+        check("T35-9 不再生成未注册的 ___auto 表",
+              not os.path.isfile(os.path.join(
+                  out, "___auto_put_this_to_text_folder.xml")))
+        check("T35-10 输出包含全部文本表（不漏文件）",
+              os.path.isfile(os.path.join(out, "configs", "text", "rus",
+                                          "table.xml")))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T36 运行期占位符硬约束 + 目标语言判定
+# ----------------------------------------------------------------------
+def t36_runtime_tokens():
+    print()
+    print("--- T36 占位符/目标语言 ---")
+    text = "$level $name %s %c[255,1,255,255] \\n"
+    masked, mapping = ait.mask_runtime_tokens(text)
+    check("T36-1 五类占位符全部 mask", len(mapping) == 5, str(mapping))
+    check("T36-2 mask 后能原样回填",
+          ait.restore_runtime_tokens(masked, mapping) == text)
+    check("T36-3 模型丢失占位符时不回填", ait.restore_runtime_tokens(
+        "坏译", mapping) is None)
+
+    root, ind, out = _ref_tree()
+    try:
+        srv = _FakeServer(fn=lambda t: "坏译")       # 故意丢占位符
+        job, ok, _logs = _run_ref_job(ait, ind, out, srv)
+        text = io.open(os.path.join(out, "configs", "text", "rus",
+                                    "table.xml"), encoding="utf-8").read()
+        check("T36-4 占位符丢失时整条保留原文（不写坏译文）",
+              "Привет, $name! Урон %s." in text)
+        check("T36-5 已中文的 $level 条目不被重译",
+              "$level $name 潜行者。" in text)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T37 专名/调试串保护
+# ----------------------------------------------------------------------
+def t37_protected_text():
+    print()
+    print("--- T37 专名保护 ---")
+    protected = [
+        ("configs/text/rus/credits.xml", "John Smith"),
+        ("configs/text/rus/table.xml", "Artist:Title"),
+        ("configs/text/rus/table.xml", "Sega Sound Team：The Dawn"),
+        ("configs/text/rus/table.xml", "M57"),
+        ("configs/text/rus/table.xml", "8 x 9x18mm"),
+        ("configs/text/rus/table.xml", "VSS“Vintorez”"),
+        ("configs/text/rus/table.xml", "dead"),
+        ("configs/text/rus/table.xml", "Copyright 2008 ReaL Studio"),
+    ]
+    for rel, s in protected:
+        check("T37-1 保护：%s" % s[:28],
+              ait.looks_like_protected_text(rel, s))
+    for s in ("Привет, сталкер. Как дела?", "Настройки",
+              "Найди документы в подвале."):
+        check("T37-2 正常正文不保护：%s" % s[:24],
+              not ait.looks_like_protected_text(
+                  "configs/text/rus/table.xml", s))
+
+
+# ----------------------------------------------------------------------
+# T38 无改动字节复制 + BOM + 注释保留 + 预览不写盘
+# ----------------------------------------------------------------------
+def t38_noop_bom_preview():
+    print()
+    print("--- T38 无改动/BOM/预览 ---")
+    root = tempfile.mkdtemp(prefix="ait_bom_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    path = os.path.join(ind, "configs", "text", "rus", "table.xml")
+    raw = ("\ufeff<string_table>\n  <!-- keep me -->\n"
+           '  <string id="a"><text>中文</text></string>\n'
+           "</string_table>\n").encode("utf-8")
+    open(path, "wb").write(raw)
+    srv = _FakeServer()
+    try:
+        job, ok, _logs = _run_ref_job(ait, ind, out, srv)
+        got = open(os.path.join(out, "configs", "text", "rus",
+                                "table.xml"), "rb").read()
+        check("T38-1 无改动表逐字节复制（BOM/注释不变）", got == raw)
+        check("T38-2 无改动不调用模型", not srv.calls, str(srv.calls))
+        # 预览不写盘
+        out2 = os.path.join(root, "out2")
+        srv2 = _FakeServer()
+        job2, ok2, _logs2 = _run_ref_job(ait, ind, out2, srv2,
+                                        preview_reference=True)
+        check("T38-3 预览模式不写盘",
+              ok2 and not os.path.isdir(out2) or
+              (not any(os.scandir(out2)) if os.path.isdir(out2) else True))
+        check("T38-4 预览模式不调用模型", not srv2.calls)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T39 UI/流程接线
+# ----------------------------------------------------------------------
+def t39_reference_wiring():
+    print()
+    print("--- T39 引用层接线 ---")
+    import inspect
+    src_build = inspect.getsource(ait.AiTranslateTab._build_step_job)
+    for key in ("reference_layer", "copy_reference", "only_referenced",
+                "protect_proper", "preview_reference"):
+        check("T39-1 界面选项存在：%s" % key, key in src_build)
+    src_run = inspect.getsource(ait.AiTranslateTab.on_run)
+    check("T39-2 任务传入引用层开关", "reference_mode=ref_mode" in src_run)
+    src_job = inspect.getsource(ait.TranslationJob.run)
+    check("T39-3 自动/文本模式走引用层", "_run_reference_layer" in src_job)
+    src_tok = inspect.getsource(ait.TranslationJob._translate_one)
+    check("T39-4 翻译入口强制 mask 占位符",
+          "mask_runtime_tokens" in src_tok
+          and "restore_runtime_tokens" in src_tok)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1628,7 +1850,9 @@ def main():
                t27_log_batch, t28_pump_budget, t29_log_volume,
                t30_server_log_level, t31_progress_channel,
                t32_cfgxml_regex_dos, t33_process_lifecycle,
-               t34_engine_mem_and_slow_log):
+               t34_engine_mem_and_slow_log, t35_reference_layer,
+               t36_runtime_tokens, t37_protected_text,
+               t38_noop_bom_preview, t39_reference_wiring):
         try:
             fn()
         except Exception as e:
