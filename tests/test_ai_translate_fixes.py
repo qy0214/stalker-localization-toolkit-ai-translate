@@ -1367,6 +1367,107 @@ def t26_cuda13_fallback():
 
 
 # ----------------------------------------------------------------------
+# T27 日志合并刷新（每条都整块重绘会卡死 UI）
+# ----------------------------------------------------------------------
+def t27_log_batch():
+    print()
+    print("--- T27 日志合并刷新 ---")
+    import queue as _queue
+
+    class View(object):
+        def __init__(self):
+            self.calls = 0
+            self.text = ""
+
+        def alive(self):
+            return True
+
+        def set_text(self, s):
+            self.calls += 1
+            self.text = s
+
+    tab = ait.AiTranslateTab.__new__(ait.AiTranslateTab)
+    tab.log_lines = []
+    tab._log_pending = False
+    tab.log_view = View()
+    tab.api = type("A", (), {"log": lambda *a, **k: None})()
+    scheduled = []
+    tab.ui_call = lambda fn, *a, **k: scheduled.append((fn, a, k))
+
+    for i in range(100):
+        tab.log("line %d" % i)
+    check("T27-1 100 条日志只排队一次整块刷新", len(scheduled) == 1,
+          str(len(scheduled)))
+    fn, a, k = scheduled.pop(0)
+    fn(*a, **k)
+    check("T27-2 一次刷新写入全部内容（末行可见）",
+          tab.log_view.calls == 1 and "line 99" in tab.log_view.text,
+          "calls=%d" % tab.log_view.calls)
+
+    for i in range(500):
+        tab.log("more %d" % i)
+    check("T27-3 环形缓冲上限 400 行", len(tab.log_lines) == 400,
+          str(len(tab.log_lines)))
+
+
+# ----------------------------------------------------------------------
+# T28 UI 泵单次预算
+# ----------------------------------------------------------------------
+def t28_pump_budget():
+    print()
+    print("--- T28 UI 泵限流 ---")
+    import queue as _queue
+
+    class Top(object):
+        def __init__(self):
+            self.after_calls = []
+
+        def after(self, ms, fn):
+            self.after_calls.append(ms)
+
+    tab = ait.AiTranslateTab.__new__(ait.AiTranslateTab)
+    tab._q = _queue.Queue()
+    tab._tk = "registered"
+    tab._top = Top()
+    tab._log_ui_error = lambda fn, e: None
+    ran = []
+    for i in range(1000):
+        tab._q.put((ran.append, (i,), {}))
+    tab._pump()
+    check("T28-1 单次泵最多处理 200 项并重新排程（不饿死事件循环）",
+          0 < len(ran) <= 200 and len(tab._top.after_calls) == 1,
+          "ran=%d after=%d" % (len(ran), len(tab._top.after_calls)))
+
+
+# ----------------------------------------------------------------------
+# T29 批量文件处理不再逐文件刷 GUI 日志
+# ----------------------------------------------------------------------
+def t29_log_volume():
+    print()
+    print("--- T29 批量文件日志降量 ---")
+    d = os.path.join(TMP, "t29")
+    src = os.path.join(d, "in")
+    out = os.path.join(d, "out")
+    os.makedirs(os.path.join(src, "configs"), exist_ok=True)
+    for i in range(120):
+        with open(os.path.join(src, "configs", "empty_%03d.xml" % i),
+                  "w", encoding="utf-8") as f:
+            f.write("<config><item>x</item></config>")
+    logs = []
+    job = ait.TranslationJob(
+        ait._load_vendor(), FakeServer(), src, "auto", "rus", "chs",
+        glossary={}, force_glossary=False, ctx_size=4096, out_dir=out,
+        log=lambda m, tag="info": logs.append(m))
+    job.run()
+    per_file = [m for m in logs if m.startswith("[")]
+    check("T29-1 120 个无文本文件不产生逐文件 GUI 日志",
+          not per_file and len(logs) <= 12,
+          "logs=%d per_file=%d" % (len(logs), len(per_file)))
+    check("T29-2 空文件计数进入收尾汇总", job.empty_files == 120,
+          str(job.empty_files))
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1374,7 +1475,8 @@ def main():
                t15_hint_block, t16_prompt_cache, t17_ledger,
                t18_glossary_layers, t19_atomic_split, t20_verify_switch,
                t21_self_check, t22_sources, t23_gpu_detect,
-               t24_cuda13_gate, t25_cuda13_task, t26_cuda13_fallback):
+               t24_cuda13_gate, t25_cuda13_task, t26_cuda13_fallback,
+               t27_log_batch, t28_pump_budget, t29_log_volume):
         try:
             fn()
         except Exception as e:

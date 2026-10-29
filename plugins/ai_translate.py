@@ -40,7 +40,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -2229,6 +2229,7 @@ class TranslationJob(object):
         self.trans_chars = 0
         self.redundant = []
         self.failed_strings = 0
+        self.empty_files = 0
         self._past = set()
         self._temp_clock = 0
         self.out_dir = out_dir or os.path.join(in_dir, "translated_hy_mt2")
@@ -2241,6 +2242,17 @@ class TranslationJob(object):
         self._ledger = {}
         self._ledger_present = False
         self._ledger_saved = 0.0
+
+    def _log_progress(self, idx, total, rel):
+        """每 50 个文件记一条 GUI 进度；逐文件明细不再进界面日志。
+
+        实测日志：6122 个文件时逐文件 log 产生近 5000 行、局部 3000 行/秒，
+        而界面每条日志整块重绘 400 行 —— Tk 主线程被占满，窗口像卡死。
+        明细保留在运行日志里（detail），界面只留可读的进度。
+        """
+        if idx == 1 or idx == total or idx % 50 == 0:
+            self.log("进度 %d/%d（%.0f%%）：%s"
+                     % (idx, total, 100.0 * idx / max(total, 1), rel))
 
     def _cancelled(self):
         return self.cancel is not None and self.cancel.is_set()
@@ -2613,6 +2625,7 @@ class TranslationJob(object):
                     out_path = os.path.join(done_dir, rel)
                     if self._should_skip(rel, full, out_path, "text"):
                         continue
+                    self._log_progress(idx, total, os.path.basename(full))
                     try:
                         n_texts = self._run_text_file(
                             os.path.basename(full), full, out_path,
@@ -2650,6 +2663,9 @@ class TranslationJob(object):
                  (self.req_count, _fmt_size(self.trans_chars),
                   ("，超长文本自动分句 %d 次" % self.long_chunks)
                   if self.long_chunks else ""))
+        if self.empty_files:
+            self.log("有 %d 个文件未提取到可译文本（前 20 个见详细日志）"
+                     % self.empty_files)
         if self.failed_strings:
             self.log("有 %d 条文本翻译失败（已保留原文，详见详细日志）"
                      % self.failed_strings, "warn")
@@ -2716,7 +2732,7 @@ class TranslationJob(object):
             out_path = os.path.join(done_dir, rel)
             if self._should_skip(rel, full, out_path, kind):
                 continue
-            self.log("[%d/%d] (%s) %s" % (idx, total, kind, rel))
+            self._log_progress(idx, total, rel)
             if kind == "text":
                 tmp = os.path.join(temp_dir, rel)
                 try:
@@ -2797,10 +2813,9 @@ class TranslationJob(object):
 
     def _run_text_file(self, fn, full, out_path, temp_path, reuse, idx, total):
         """处理单个文本 XML；返回条目数，取消时返回 -1（区别于"空文件"的 0）。"""
-        self.log("[%d/%d] %s" % (idx, total, fn))
         chain = read_encoding_chain(full)
         texts = self._parse(self.p.parse_xray_text_xml, full, chain)
-        self.log("  共 %d 条文本" % len(texts))
+        self.detail("  共 %d 条文本" % len(texts))
         if not texts:
             if os.path.exists(out_path):
                 if self._is_stale_empty_output(out_path):
@@ -2931,7 +2946,7 @@ class TranslationJob(object):
             out_path = os.path.join(done_dir, rel)
             if self._should_skip(rel, full, out_path, self.mode):
                 continue
-            self.log("[%d/%d] %s" % (idx, total, rel))
+            self._log_progress(idx, total, rel)
             try:
                 rep = self._process_non_text(full, reuse, extract,
                                              text_id_prefix, gen)
@@ -2987,8 +3002,10 @@ class TranslationJob(object):
             self.log("⚠ %s 疑为编码误判（乱码特征），请先用「编码转换」页"
                      "统一转成 UTF-8" % os.path.basename(full), "warn")
         if not cands:
-            self.detail("  %s 未提取到可译文本（%s 模式的提取规则见上游）"
-                        % (os.path.basename(full), self.mode))
+            self.empty_files += 1
+            if self.empty_files <= 20:
+                self.detail("  %s 未提取到可译文本（%s 模式的提取规则见上游）"
+                            % (os.path.basename(full), self.mode))
         if self._cancelled():
             return None
         rep = {}
@@ -3176,6 +3193,7 @@ class AiTranslateTab(object):
         self._starting = False
         self._cfg_save_warned = False
         self._hw_cuda13_ok = False
+        self._log_pending = False
         self.scan_info = None
         self.scan_dir = None
         self._mode_plain = self.cfg.get("mode", "auto")
@@ -3238,15 +3256,21 @@ class AiTranslateTab(object):
             pass
 
     def _pump(self):
-        try:
-            while True:
+        # 一次把队列抽干会让主线程长时间回不到事件循环 —— 几千条日志排队时
+        # 窗口表现为"卡死"。这里限制单次预算（200 项 / 15ms），剩下的下个
+        # tick 继续，保证重绘与输入事件始终有机会执行。
+        t0 = time.time()
+        for _ in range(200):
+            try:
                 fn, a, k = self._q.get_nowait()
-                try:
-                    fn(*a, **k)
-                except Exception as e:
-                    self._log_ui_error(fn, e)
-        except queue.Empty:
-            pass
+            except queue.Empty:
+                break
+            try:
+                fn(*a, **k)
+            except Exception as e:
+                self._log_ui_error(fn, e)
+            if time.time() - t0 > 0.015:
+                break
         top = getattr(self, "_top", None)
         if top is None:
             return
@@ -3273,13 +3297,20 @@ class AiTranslateTab(object):
         line = "%s  %s" % (time.strftime("%H:%M:%S"), msg)
         self.log_lines.append(line)
         del self.log_lines[:-400]
-        text = "\n".join(self.log_lines)
         self.api.log(msg, tag)
+        # 每条日志都整块 set_text（最多 400 行）在批量文件处理时会把主线程
+        # 压死；这里只置脏标记，一个泵周期内合并成一次重绘。
+        if not self._log_pending:
+            self._log_pending = True
+            self.ui_call(self._flush_log)
 
-        def upd():
+    def _flush_log(self):
+        self._log_pending = False
+        try:
             if self.log_view.alive():
-                self.log_view.set_text(text)
-        self.ui_call(upd)
+                self.log_view.set_text("\n".join(self.log_lines))
+        except Exception:
+            pass
 
     def dl_log(self, msg):
         self.log(msg)
