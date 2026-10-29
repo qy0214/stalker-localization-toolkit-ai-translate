@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-10-29T22:35:34+08:00",
+  "generated_at": "2026-10-29T23:14:55+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "095501a",
+    "commit": "62f0625",
     "single_commit": false,
     "dirty": false,
     "dirty_files": []
   },
   "versions": {
-    "plugin_version": "1.6.2",
-    "expected_plugin_version": "1.6.2",
+    "plugin_version": "1.6.3",
+    "expected_plugin_version": "1.6.3",
     "target_toolkit": "STALKER Localization Toolkit 1.1.0",
     "historical_exe_version": "1.1.0.0"
   },
@@ -20,16 +20,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 185179,
-      "sha256": "4f8799632c6db123a6b1daf355d563deea5b467e430baa5c42f10a35dabd42fc",
+      "size": 185790,
+      "sha256": "fd097f79f117c5080414c7ee4d854322f65645d5f96ddcec4c95a4e36c40a77b",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
-      "path": "dist\\ai_translate_plugin_v1.6.2.zip",
+      "path": "dist\\ai_translate_plugin_v1.6.3.zip",
       "exists": true,
-      "size": 274306,
-      "sha256": "e78001b892f0dc5590e56727226d1f73620fd49f674a91a908e06266e93d30b0",
+      "size": 274435,
+      "sha256": "1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02",
       "note": "当前发布包"
     },
     {
@@ -68,8 +68,8 @@
       "role": "使用说明",
       "path": "使用说明.txt",
       "exists": true,
-      "size": 16428,
-      "sha256": "3e56a521cbdbf68239eb21233128caa34f8faaf37ab5bde5e48374164f93641b",
+      "size": 17054,
+      "sha256": "ee0ed5b1170da12aa0f97bfc3e5ece59340d49ce76b8eae8eda111087e51e4bc",
       "note": "含发布包 SHA-256"
     },
     {
@@ -98,8 +98,8 @@
     }
   ],
   "zip": {
-    "path": "dist\\ai_translate_plugin_v1.6.2.zip",
-    "sha256": "e78001b892f0dc5590e56727226d1f73620fd49f674a91a908e06266e93d30b0",
+    "path": "dist\\ai_translate_plugin_v1.6.3.zip",
+    "sha256": "1d24cefb439495624971a6934fdda494362d35d38ba4418ac163704a44106f02",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -151,12 +151,12 @@
     {
       "check": "插件版本 == 预期",
       "ok": true,
-      "detail": "PLUGIN_INFO 1.6.2 / 预期 1.6.2"
+      "detail": "PLUGIN_INFO 1.6.3 / 预期 1.6.3"
     },
     {
       "check": "zip 文件名含插件版本",
       "ok": true,
-      "detail": "ai_translate_plugin_v1.6.2.zip"
+      "detail": "ai_translate_plugin_v1.6.3.zip"
     },
     {
       "check": "zip 条目 == 5 个预期文件",
@@ -236,12 +236,12 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "e78001b892f0dc55…"
+      "detail": "1d24cefb43949562…"
     },
     {
       "check": "使用说明含插件版本",
       "ok": true,
-      "detail": "ai_translate 1.6.2"
+      "detail": "ai_translate 1.6.3"
     },
     {
       "check": "dist 只保留当前版本 zip",
@@ -308,6 +308,6 @@
   },
   "tracked": {
     "files": 29,
-    "bytes": 17860560
+    "bytes": 17863170
   }
 }
