@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.7.4",
+    "version": "1.7.5",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -1149,6 +1149,8 @@ DEFAULT_CONFIG = {
     "reuse_dir": "",
     "glossary": "",
     "force_glossary": True,
+    "glossary_force": False,
+    "protect_proper_v2": False,
     "src_lang": "auto",
     "mode": "auto",
     "output_anyway": False,
@@ -1272,6 +1274,39 @@ def load_glossary_layers():
         merged.pop(key, None)
     merged.update(set_map)
     return merged, set_map, deleted, clear
+
+
+# 只把真正跨语境稳定的专名当硬词。界面与提示（Здоровье→生命值）、
+# 任务、对话/百科类会随语境变化，一律只做软参考或不注入，避免
+# “Здоровье не шалит?”被硬塞成“生命值”这类语境错误。
+_HARD_TERM_CATEGORIES = (
+    "阵营与组织", "人物与军衔", "地点与区域", "变异生物",
+    "物品·武器·装备·神器")
+
+
+def load_hard_glossary_keys():
+    """只把“游戏专名/物品/界面”类术语当硬词；对话/百科类只做参考。
+
+    builtin 术语表是扁平表，混入了大量新闻/对话里的普通词和屈折形
+    （例如 Информацию→信息、Искренне→火花）。这些词强制替换会把
+    句子改坏；按随包 stalker_termbase.json 的分类筛出硬词，
+    普通词不再注入/强制，交给模型按语境判断。
+    """
+    path = os.path.join(_ASSETS, "stalker_termbase.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return set()
+    keys = set()
+    if not isinstance(data, dict):
+        return keys
+    for cat, table in data.items():
+        if cat.startswith("_") or cat not in _HARD_TERM_CATEGORIES:
+            continue
+        if isinstance(table, dict):
+            keys.update(str(k) for k in table)
+    return keys
 
 
 def save_user_glossary(set_map, deleted=None, clear_builtin=False):
@@ -2241,7 +2276,7 @@ _DEBUG_LIKE_RE = re.compile(
     r"(?:onItemDrop|npcObj|FAILED\b|sect\s*-|obj\s*:|gvid\s*:|"
     r"^(?:~|[a-z][a-z0-9_]*\s*:|\[[^\]]+\]|load\b|debug\b|log\b|"
     r"error\b)|\b(?:teleport\w*|reinit|timer|spawn|task_\w+|check_task|"
-    r"kamps|npcItems|content|isVisual\w*)\b|\bf[A-Z][A-Za-z]+\b|"
+    r"kamps|npcItems|isVisual\w*)\b|\bf[A-Z][A-Za-z]+\b|"
     r"\b[rsg][0-9]?_[a-z0-9_]+\b|content\s*:)", re.I)
 _DEBUG_PHRASES = {"dead", "none", "null", "true", "false",
                   "avail end", "start here", "reinit timer"}
@@ -2255,29 +2290,16 @@ def _has_translatable_text(text):
     return bool(re.search(r"[A-Za-zА-Яа-яЁё]{2,}", clean))
 
 
-def looks_like_protected_text(rel, text):
-    """是否按“专名/歌名/型号/代号/调试串”保护原文（不送翻）。"""
-    low = (rel or "").lower().replace("\\", "/")
-    if any(h in low for h in _PROTECT_FILE_HINTS):
-        return True
+def looks_like_code_or_debug(rel, text):
+    """结构性噪声：调试日志/路径/URL/代号。**总是**跳过，不占“专名保护”。"""
     s = (text or "").strip()
-    if not s or len(s) <= 2:
+    if not s or len(s) <= 1:
         return True
-    low_rel = (rel or "").lower().replace("\\", "/")
-    # 脚本/名字/地标表里的单个人名、地名：补丁保留原文，不硬翻。
-    if any(h in low_rel for h in ("script", "mapspot", "name", "snames",
-                                  "fnames")):
-        if re.fullmatch(r"[А-ЯЁ][а-яё\-]{2,20}", s):
-            return True
-        if (len(s.split()) <= 2
-                and not re.search(r"[.!?。！？]", s)
-                and re.fullmatch(r"[A-Za-zА-Яа-яЁё .\-]+", s)):
-            return True
-    if (s.lower() in _DEBUG_PHRASES or _COPYRIGHT_RE.match(s)
-            or _DEBUG_LIKE_RE.search(s) or _FILE_EXT_RE.search(s)):
+    if s.lower() in _DEBUG_PHRASES or _COPYRIGHT_RE.match(s):
         return True
-    if (_TITLE_LIKE_RE.match(s) or _TITLE_DASH_RE.match(s)
-            or _MODEL_LIKE_RE.match(s)):
+    if _DEBUG_LIKE_RE.search(s) or _FILE_EXT_RE.search(s):
+        return True
+    if s.lower().startswith(("http://", "https://", "www.")):
         return True
     # 短代号/弹药规格/型号：只含字母数字与 . - / _ 空格，且带数字
     if (re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 .\-/_]{0,40}",
@@ -2286,9 +2308,43 @@ def looks_like_protected_text(rel, text):
         return True
     if _CODE_LIKE_RE.match(s) and any(c.isdigit() for c in s):
         return True
+    return False
+
+
+def looks_like_identifier_text(text):
+    """纯小写 ASCII 的“段落/任务/节名”不是用户正文（如 resque information）。"""
+    s = (text or "").strip()
+    if not s:
+        return True
+    if re.fullmatch(r"[a-z0-9_.\- /]{1,90}", s) and not re.search(
+            r"[.!?,;:()\[\]{}]", s):
+        return True
+    # 纯 ASCII、无句末标点、<=6 个词：多为任务/段落/角色/资源名
+    # （Courier document / My map task / Gans Wiberg / Karta Name），
+    # 不是用户正文；真正正文通常有西里尔字母或句末标点。
+    if (s.isascii() and len(s.split()) <= 6
+            and not re.search(r"[.!?。！？]", s)):
+        return True
+    return False
+
+
+def looks_like_proper_text(rel, text):
+    """专名/歌名/型号：只在用户勾选“保护专名”时跳过。"""
+    s = (text or "").strip()
+    if not s:
+        return False
+    if (_TITLE_LIKE_RE.match(s) or _TITLE_DASH_RE.match(s)
+            or _MODEL_LIKE_RE.match(s)):
+        return True
     if len(s) <= 20 and s.isupper() and any(c.isalpha() for c in s):
         return True
     return False
+
+
+def looks_like_protected_text(rel, text):
+    """兼容旧接口：结构性噪声或专名。"""
+    return (looks_like_code_or_debug(rel, text)
+            or looks_like_proper_text(rel, text))
 
 
 def split_protected(text, max_chars, pattern):
@@ -2669,6 +2725,16 @@ class GlossaryIndex(object):
 
 
 
+_DUP_FUNCTION_RE = re.compile(r"(有有|的的|了了|是是|在在)")
+
+
+def clean_translation_output(text):
+    """清掉模型常见的功能词重复（有有/的的/了了…），不动正常叠词。"""
+    if not text:
+        return text
+    return _DUP_FUNCTION_RE.sub(lambda m: m.group(1)[0], text)
+
+
 class TranslationJob(object):
     def __init__(self, parser, server, in_dir, mode, src_lang, tgt_lang,
                  reuse_dir=None, glossary=None, output_anyway=False,
@@ -2676,7 +2742,8 @@ class TranslationJob(object):
                  log=None, detail=None, progress=None, cancel_event=None,
                  reference_mode=False, copy_reference=True,
                  only_referenced=False, protect_proper=True,
-                 preview_reference=False):
+                 preview_reference=False, hard_glossary_keys=None,
+                 translate_literals=False):
         self.p = parser
         self.srv = server
         self.in_dir = in_dir
@@ -2718,6 +2785,11 @@ class TranslationJob(object):
         self.out_dir = out_dir or os.path.join(in_dir, "translated_hy_mt2")
         self._excluded_paths = set()
         self.gloss = GlossaryIndex(self.glossary) if self.glossary else None
+        # None = 兼容旧 API/测试：所有术语都可用；set = 只在这些硬词上
+        # 强制/提示（UI 传入 termbase 的专名类 + 用户自定义层）。
+        self.gloss_hard = (set(hard_glossary_keys)
+                           if hard_glossary_keys is not None else None)
+        self.translate_literals = bool(translate_literals)
         # 完成账本：记录"每个输入文件的指纹 + 输出大小"，取代"输出文件存在就算
         # 译完"。旧做法在两种真实场景下会静默漏译：①游戏更新给 XML 加了新条目，
         # ②ltx/cfg 上次中断留下半截输出 —— 两者都会被"存在即跳过"永久保留。
@@ -2815,8 +2887,22 @@ class TranslationJob(object):
         return han / len(letters) > 0.1
 
     def _glossary_hits(self, text):
-        """命中的术语（长词优先）。走索引，不再逐条遍历整个术语表。"""
-        return self.gloss.hits(text) if self.gloss is not None else []
+        """命中的硬术语 (原文, 译文)，用于提示块；普通词不注入。"""
+        if self.gloss is None:
+            return []
+        pairs = self.gloss.hits(text)
+        if self.gloss_hard is None:
+            return pairs
+        return [(k, v) for k, v in pairs if k in self.gloss_hard]
+
+    def _glossary_spans(self, text):
+        """命中的硬术语 (start, end, key)，用于强制/切片。"""
+        if self.gloss is None:
+            return []
+        spans = self.gloss.find(text)
+        if self.gloss_hard is None:
+            return spans
+        return [h for h in spans if h[2] in self.gloss_hard]
 
     def _translate_chunk(self, content, lang, hints, depth=0):
         """翻译单个句段：超出该档安全长度时按句切分逐段翻译并拼回，
@@ -2912,7 +2998,7 @@ class TranslationJob(object):
         """
         out = []
         last = 0
-        for start, end, key in self.gloss.find(text):
+        for start, end, key in self._glossary_spans(text):
             if start > last:
                 out.append(self._translate_segments(text[last:start], lang))
             out.append(self.glossary[key])
@@ -2932,7 +3018,7 @@ class TranslationJob(object):
         都能守住），最后回填，术语仍然是 100% 确定。
         校验不过（占位符丢失/控制符被改）时自动回退旧做法，不会产出坏译文。
         """
-        hits = self.gloss.find(text)
+        hits = self._glossary_spans(text)
         if not hits:
             return self._translate_segments(text, lang)
 
@@ -3359,35 +3445,37 @@ class TranslationJob(object):
                      % "、".join("%s×%d" % (k, v) for k, v in top), "warn")
         return refs, ref_files, unresolved
 
-    def _table_looks_protected(self, table):
-        """整表像“歌曲/作品名列表”时保护：按结构判定，不写死文件名。"""
-        if not self.protect_proper or len(table) < 10:
-            return False
-        title = 0
-        for ent in table.values():
-            _, src = self._pick_source(ent)
-            s = (src or "").strip()
-            if "ogg" in s.lower():
-                return True          # OGG 播放器歌名表
-            if _TITLE_LIKE_RE.match(s) or _TITLE_DASH_RE.match(s):
-                title += 1
-        return title >= max(5, len(table) // 2)
-
     def _pick_source(self, ent):
-        """按游戏语言优先取源文；没有该语言时退回解析器推荐。"""
+        """按游戏语言取源文：显式源语言 → localization → rus 优先。
+
+        STALKER 系 MOD 的主语言基本是俄语。旧逻辑用 vendor 的
+        getRecommendLangText 会优先 eng，把英语意译当原文（例如
+        “all right”被翻成“所有 向右”、“rest”被翻成“休息”），
+        俄文原文反而没被使用。这里默认 rus 优先，只有缺 rus 才用 eng。
+        """
         texts = ent.texts or {}
-        hint = self._lang_hint
-        if hint and isinstance(texts, dict):
-            value = texts.get(hint, "")
+        if not isinstance(texts, dict):
+            return self.p.getRecommendLangText(ent, self.tgt)
+        order = []
+        if self.src_lang in ("rus", "eng", "ukr"):
+            order.append(self.src_lang)
+        if self._lang_hint:
+            order.append(self._lang_hint)
+        order += ["rus", "text", "eng", "ukr", "tur"]
+        seen = set()
+        for lang in order:
+            if lang in seen:
+                continue
+            seen.add(lang)
+            value = texts.get(lang, "")
             if value and value.strip():
-                return hint, value
+                return lang, value
         return self.p.getRecommendLangText(ent, self.tgt)
 
     def _reference_candidates(self):
         total = todo = protected = 0
         for full, table in self._table_entries.items():
             rel = os.path.relpath(full, self.in_dir)
-            table_protect = self._table_looks_protected(table)
             for ent in table.values():
                 _lang, src = self._pick_source(ent)
                 if not src or not src.strip():
@@ -3396,12 +3484,12 @@ class TranslationJob(object):
                     continue
                 if not _has_translatable_text(src):
                     continue
+                if looks_like_code_or_debug(rel, src):
+                    continue
                 total += 1
                 if self.only_referenced and ent.id not in self._ref_counts:
                     continue
-                if self.protect_proper and (
-                        table_protect
-                        or looks_like_protected_text(rel, src)):
+                if self.protect_proper and looks_like_proper_text(rel, src):
                     protected += 1
                     continue
                 todo += 1
@@ -3450,13 +3538,118 @@ class TranslationJob(object):
                 self.log("文本表 %d/%d（%d%%）：%s"
                          % (idx, n_tables, 100 * idx // n_tables, rel))
         copied_refs = self._copy_reference_layer(done_dir)
+        lit = {"files": 0, "entries": 0}
+        if self.translate_literals:
+            lit = self._run_literal_layer(done_dir)
         self.empty_files = sum(1 for t in self._table_entries.values()
                                if not t)
         self.log("引用层完成：改写文本表 %d 个，原样复制 %d 个；"
-                 "复制引用/配置 %d 个；译 %d 条，跳过专名 %d 条，失败 %d 条"
-                 % (changed, copied, copied_refs, translated, skipped, failed),
-                 "ok")
+                 "复制引用/配置 %d 个；译 %d 条，跳过噪声 %d 条，失败 %d 条；"
+                 "脚本/XML 字面文本：改写 %d 个文件 / %d 条"
+                 % (changed, copied, copied_refs, translated, skipped, failed,
+                    lit["files"], lit["entries"]), "ok")
         return True
+
+    def _run_literal_layer(self, done_dir):
+        """把脚本/XML 里**不是 ID** 的字面文本抽到新表并注册。
+
+        文本表只解决“ID → 正文”这一层；脚本和 UI XML 里仍有直接写着的
+        俄文/英文（补丁的 scripts.xml / ui.xml / gameplay.xml 就是这些）。
+        不处理它们，游戏里就会看到俄文或 ID。这里复用旧的提取器：
+        字面文本 → 新 ID，原文件只换 ASCII ID，新表 UTF-8。
+        """
+        prefix = "sgtat_gen_text_%d_" % int(time.time())
+        gen = [0]
+        extract = {}
+        written = 0
+        total = 0
+        targets = []
+        for full in self._iter_files():
+            rel = os.path.relpath(full, self.in_dir)
+            kind = self._classify_file(full, rel)
+            if kind in ("cfg", "script"):
+                targets.append((kind, rel, full))
+        targets.sort(key=lambda x: x[1])
+        for kind, rel, full in targets:
+            if self._cancelled():
+                self.log("已取消：字面文本层已处理的文件保留在输出目录")
+                break
+            out_path = os.path.join(done_dir, rel)
+            old_mode = self.mode
+            self.mode = "cfgxml" if kind == "cfg" else "scriptE"
+            try:
+                rep = self._process_non_text(full, {}, extract, prefix, gen)
+            except Exception as e:
+                self.failed_strings += 1
+                self.detail("  字面文本提取失败：%s（%s: %s）"
+                            % (rel, type(e).__name__, e))
+                rep = None
+            finally:
+                self.mode = old_mode
+            if rep is None:
+                continue
+            whole, rep_dict, enc = rep
+            if not rep_dict:
+                continue
+            try:
+                self._write_atomic(
+                    out_path,
+                    lambda p: self.p.generateOutputFileFromString(
+                        p, whole, needXmlHeader=False,
+                        encoding=enc or "utf-8"))
+            except Exception as e:
+                self.failed_strings += 1
+                self.detail("  字面文本回写失败：%s（%s: %s）"
+                            % (rel, type(e).__name__, e))
+                continue
+            written += 1
+            total += len(rep_dict)
+            self._record_done(rel, full, out_path)
+            if written % 20 == 0:
+                self.log("字面文本：已改写 %d 个文件 / %d 条…"
+                         % (written, total))
+        if extract:
+            name = "sgtat_auto_texts"
+            table_path = os.path.join(done_dir, "configs", "text",
+                                      name + ".xml")
+            self._write_atomic(
+                table_path,
+                lambda p: self.p.generateOutputXml(p, extract,
+                                                   splitLength=1000))
+            self._register_localization(done_dir, name)
+            self.log("字面文本表：%s（%d 条），已写入 localization.ltx"
+                     % (table_path, len(extract)), "ok")
+        return {"files": written, "entries": total}
+
+    def _register_localization(self, done_dir, table_name):
+        """把生成的文本表名追加到 configs/localization.ltx 的 files 行。"""
+        src = os.path.join(self.in_dir, "configs", "localization.ltx")
+        out = os.path.join(done_dir, "configs", "localization.ltx")
+        if os.path.isfile(src):
+            text = read_text_any(src)
+        else:
+            text = ("[string_table]\nlanguage = %s\nfont_prefix =\n"
+                    % (self._lang_hint or "rus"))
+        lines = text.splitlines()
+        found = False
+        for i, line in enumerate(lines):
+            s = line.strip()
+            if s.lower().startswith("files") and "=" in s:
+                key, value = line.split("=", 1)
+                names = [x.strip() for x in value.split(",") if x.strip()]
+                if table_name not in names:
+                    names.append(table_name)
+                lines[i] = key + "= " + ", ".join(names)
+                found = True
+                break
+        if not found:
+            lines.extend(["", "files = " + table_name])
+        parent = os.path.dirname(out) or "."
+        os.makedirs(parent, exist_ok=True)
+        tmp = out + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(lines) + "\n")
+        os.replace(tmp, out)
 
     def _translate_table(self, full, out_path, rel):
         st = {"translated": 0, "skipped": 0, "failed": 0,
@@ -3473,8 +3666,6 @@ class TranslationJob(object):
             st["copied"] = True
             self._record_done(rel, full, out_path)
             return st
-        table = {e.id: e for e in ents if e.id}
-        table_protect = self._table_looks_protected(table)
         changes = {}
         for ent in ents:
             if self._cancelled():
@@ -3486,11 +3677,12 @@ class TranslationJob(object):
                 continue
             if not _has_translatable_text(src):
                 continue
+            if looks_like_code_or_debug(rel, src):
+                st["skipped"] += 1
+                continue
             if self.only_referenced and ent.id not in self._ref_counts:
                 continue
-            if self.protect_proper and (
-                    table_protect
-                    or looks_like_protected_text(rel, src)):
+            if self.protect_proper and looks_like_proper_text(rel, src):
                 st["skipped"] += 1
                 continue
             use_lang = self.src_lang if self.src_lang != "auto" else lang
@@ -3503,6 +3695,7 @@ class TranslationJob(object):
                 continue
             if not out or not out.strip():
                 continue
+            out = clean_translation_output(out)
             lead = src[:len(src) - len(src.lstrip())]
             trail = src[len(src.rstrip()):]
             new = lead + out.strip() + trail
@@ -3535,24 +3728,59 @@ class TranslationJob(object):
         return st
 
     def _write_table_as_utf8(self, full, out_path, ents, changes, rel):
-        """非 UTF-8 文本表：整表转 UTF-8 重写（保留所有 id）。"""
-        values = {}
-        for ent in ents:
-            if not ent.id:
+        """非 UTF-8 文本表：保持 <rus>/<eng>/<tur> 结构转 UTF-8。
+
+        不能走 generateOutputXml：它只写 <text>，会把原文的 <rus>/<eng>
+        标签全部丢掉（实测这个 MOD 的 stable_dialogs 从 52 KB 缩到 24 KB，
+        引擎按 rus 读时就可能读不到中文）。这里逐条改 <rus> 内容，
+        只把 XML 声明的编码换成 utf-8。
+        """
+        try:
+            raw = open(full, "rb").read()
+        except OSError:
+            return False
+        text = None
+        had_bom = raw.startswith(b"\xef\xbb\xbf")
+        for enc in ("utf-8-sig", "utf-8", "cp1251", "cp1252"):
+            try:
+                text = raw.decode(enc)
+                break
+            except UnicodeDecodeError:
                 continue
-            if ent.id in changes:
-                values[ent.id] = changes[ent.id][1]
+        if text is None:
+            text = raw.decode("utf-8", "replace")
+        applied = missed = 0
+        for eid, (lang, new_text) in changes.items():
+            text, ok = self._patch_table_text(text, eid, lang, new_text)
+            if ok:
+                applied += 1
             else:
-                _lang, src = self._pick_source(ent)
-                values[ent.id] = src if src is not None else ""
-        if not values:
+                missed += 1
+        if applied == 0:
+            self.log("文本表条目定位失败，保留原文：%s" % rel, "warn")
             self._copy_file(full, out_path)
             return False
-        self.log("文本表不是 UTF-8，已转 UTF-8 重写（保留全部条目）：%s"
-                 % rel, "warn")
-        self._write_atomic(
-            out_path,
-            lambda p: self.p.generateOutputXml(p, values, splitLength=1000))
+        if missed:
+            self.detail("  %s：%d 条已改写，%d 条定位失败（保留原文）"
+                        % (rel, applied, missed))
+        text = re.sub(
+            r'(<\?xml[^>]*?\bencoding\s*=\s*["\'])[^"\']+(["\'])',
+            r"\1utf-8\2", text, count=1, flags=re.I)
+        if not text.lstrip().startswith("<?xml"):
+            text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
+        data = (b"\xef\xbb\xbf" if had_bom else b"") + text.encode("utf-8")
+        parent = os.path.dirname(out_path) or "."
+        os.makedirs(parent, exist_ok=True)
+        tmp = out_path + ".tmp"
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, out_path)
+        except OSError as e:
+            self.log("文本表写入失败（保留原文）：%s（%s）" % (rel, e), "err")
+            self._copy_file(full, out_path)
+            return False
+        self.log("文本表转 UTF-8 并保留语言标签：%s" % rel, "warn")
         return True
 
     @staticmethod
@@ -3996,7 +4224,15 @@ class TranslationJob(object):
         else:
             whole, cands = self._parse(
                 self.p.parse_xray_script_file, full, chain)
+            # 脚本按原编码写回（只把字面文本换成 ASCII 新 ID，不改编码）
             enc = "utf-8"
+            for candidate_enc in chain:
+                try:
+                    whole.encode(candidate_enc)
+                    enc = candidate_enc
+                    break
+                except (UnicodeEncodeError, LookupError):
+                    continue
         if chain and chain[0] not in _ENC_UTF8 and looks_like_mojibake(whole):
             self.log("⚠ %s 疑为编码误判（乱码特征），请先用「编码转换」页"
                      "统一转成 UTF-8" % os.path.basename(full), "warn")
@@ -4030,6 +4266,13 @@ class TranslationJob(object):
                 if (self.p.doesTextLookLikeId(send)
                         or self.p.doesTextLookLikeScript(send)):
                     continue
+            rel = os.path.relpath(full, self.in_dir)
+            if looks_like_code_or_debug(rel, send):
+                continue
+            if looks_like_identifier_text(send):
+                continue
+            if self.protect_proper and looks_like_proper_text(rel, send):
+                continue
             if self._cancelled():
                 return None
             try:
@@ -4515,7 +4758,7 @@ class AiTranslateTab(object):
         _combo_set(self.lang_combo, lang_vals, li)
         self.force_chk = self._reg(ui.checkbox(r3, "强制术语", on_toggle=None))
         ui.pack(self.force_chk, side="left")
-        _chk_set(self.force_chk, self.cfg.get("force_glossary", True))
+        _chk_set(self.force_chk, self.cfg.get("glossary_force", False))
 
         # 引用层选项：默认自动识别 ID 引用、输出完整补丁、保护专名。
         # 不写死任何 MOD 路径；开关都可在界面改，并写入 config.json。
@@ -4540,11 +4783,15 @@ class AiTranslateTab(object):
         self.protect_chk = self._reg(ui.checkbox(
             r5, "保护专名/歌名/型号", on_toggle=None))
         ui.pack(self.protect_chk, side="left", padx=(0, 6))
-        _chk_set(self.protect_chk, self.cfg.get("protect_proper", True))
+        _chk_set(self.protect_chk, self.cfg.get("protect_proper_v2", False))
         self.preview_chk = self._reg(ui.checkbox(
             r5, "先预览（不写盘）", on_toggle=None))
         ui.pack(self.preview_chk, side="left")
         _chk_set(self.preview_chk, self.cfg.get("preview_reference", False))
+        self.literal_chk = self._reg(ui.checkbox(
+            r5, "翻译脚本/XML 字面文本", on_toggle=None))
+        ui.pack(self.literal_chk, side="left", padx=(6, 0))
+        _chk_set(self.literal_chk, self.cfg.get("translate_literals", True))
 
         ex1 = self._reg(ui.row(p))
         ui.pack(ex1, fill="x", pady=(3, 0))
@@ -4776,15 +5023,16 @@ class AiTranslateTab(object):
                 break
         self._mode_plain = self.cfg["mode"]
         try:
-            self.cfg["force_glossary"] = _chk_get(self.force_chk)
+            self.cfg["glossary_force"] = _chk_get(self.force_chk)
         except Exception:
             pass
         for key, widget in (
                 ("reference_layer", self.ref_chk),
                 ("copy_reference", self.copy_ref_chk),
                 ("only_referenced", self.only_ref_chk),
-                ("protect_proper", self.protect_chk),
-                ("preview_reference", self.preview_chk)):
+                ("protect_proper_v2", self.protect_chk),
+                ("preview_reference", self.preview_chk),
+                ("translate_literals", self.literal_chk)):
             try:
                 self.cfg[key] = _chk_get(widget)
             except Exception:
@@ -5559,17 +5807,22 @@ class AiTranslateTab(object):
         save_config(self.cfg)
         glossary = dict(self.gloss_user)
         force_glossary = _chk_get(self.force_chk)
+        # 只给模型/强制路径提供专名类硬术语；对话/百科类普通词不注入。
+        hard_glossary = load_hard_glossary_keys() | set(self._gloss_set)
+        hard_glossary = hard_glossary or None
         ref_mode = False
         copy_ref = True
         only_ref = False
-        protect_proper = True
+        protect_proper = False
         preview_ref = False
+        translate_literals = True
         try:
             ref_mode = bool(_chk_get(self.ref_chk))
             copy_ref = bool(_chk_get(self.copy_ref_chk))
             only_ref = bool(_chk_get(self.only_ref_chk))
             protect_proper = bool(_chk_get(self.protect_chk))
             preview_ref = bool(_chk_get(self.preview_chk))
+            translate_literals = bool(_chk_get(self.literal_chk))
         except Exception:
             pass
 
@@ -5656,7 +5909,9 @@ class AiTranslateTab(object):
                     copy_reference=copy_ref,
                     only_referenced=only_ref,
                     protect_proper=protect_proper,
-                    preview_reference=preview_ref)
+                    preview_reference=preview_ref,
+                    hard_glossary_keys=hard_glossary,
+                    translate_literals=translate_literals)
                 job.run()
             except Exception as e:
                 self.ui_call(self.log, "翻译失败：%s" % e, "err")

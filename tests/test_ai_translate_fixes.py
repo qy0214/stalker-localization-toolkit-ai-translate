@@ -36,6 +36,11 @@ _TEST_ROOT = tempfile.mkdtemp(prefix="ait_plugin_")
 os.makedirs(os.path.join(_TEST_ROOT, "ai_translate_assets"), exist_ok=True)
 shutil.copy2(_ORIG_PLUGIN, os.path.join(_TEST_ROOT, "ai_translate.py"))
 shutil.copy2(_ORIG_ZIP, os.path.join(_TEST_ROOT, "ai_translate_assets", "xray_pkg.zip"))
+_ASSET_SRC = os.path.join(ROOT, "plugins", "ai_translate_assets")
+for _name in ("stalker_termbase.json", "glossary_builtin.json"):
+    _src = os.path.join(_ASSET_SRC, _name)
+    if os.path.isfile(_src):
+        shutil.copy2(_src, os.path.join(_TEST_ROOT, "ai_translate_assets", _name))
 PLUGIN = os.path.join(_TEST_ROOT, "ai_translate.py")
 atexit.register(shutil.rmtree, _TEST_ROOT, ignore_errors=True)
 
@@ -1672,13 +1677,14 @@ def _ref_tree():
 def _run_ref_job(ait, ind, out, server, **kw):
     logs = []
     preview = kw.pop("preview_reference", False)
+    protect = kw.pop("protect_proper", True)
     job = ait.TranslationJob(
         ait._load_vendor(), server, ind, "auto", "auto", "chs",
         out_dir=out,
         log=lambda m, tag="info": logs.append(m),
         detail=lambda m, tag="info": None,
         reference_mode=True, copy_reference=True, only_referenced=False,
-        protect_proper=True, preview_reference=preview, **kw)
+        protect_proper=protect, preview_reference=preview, **kw)
     ok = job.run()
     return job, ok, logs
 
@@ -1761,23 +1767,34 @@ def t36_runtime_tokens():
 # ----------------------------------------------------------------------
 def t37_protected_text():
     print()
-    print("--- T37 专名保护 ---")
-    protected = [
-        ("configs/text/rus/credits.xml", "John Smith"),
-        ("configs/text/rus/table.xml", "Artist:Title"),
-        ("configs/text/rus/table.xml", "Sega Sound Team：The Dawn"),
+    print("--- T37 噪声/专名保护 ---")
+    noise = [
         ("configs/text/rus/table.xml", "M57"),
         ("configs/text/rus/table.xml", "8 x 9x18mm"),
-        ("configs/text/rus/table.xml", "VSS“Vintorez”"),
         ("configs/text/rus/table.xml", "dead"),
         ("configs/text/rus/table.xml", "Copyright 2008 ReaL Studio"),
+        ("configs/text/rus/table.xml", "~babah~ onItemDrop obj:"),
+        ("configs/text/rus/table.xml", "https://example.com/a"),
     ]
-    for rel, s in protected:
-        check("T37-1 保护：%s" % s[:28],
-              ait.looks_like_protected_text(rel, s))
+    for rel, s in noise:
+        check("T37-1 噪声跳过：%s" % s[:28],
+              ait.looks_like_code_or_debug(rel, s))
+    proper = [
+        ("configs/text/rus/table.xml", "Artist:Title"),
+        ("configs/text/rus/table.xml", "Sega Sound Team：The Dawn"),
+        ("configs/text/rus/table.xml", "VSS“Vintorez”"),
+        ("configs/text/rus/table.xml", "NVIDIA DLSS"),
+    ]
+    for rel, s in proper:
+        check("T37-2 专名（可选保护）：%s" % s[:28],
+              ait.looks_like_proper_text(rel, s))
+    for s in ("John Smith", "Крот", "青灰色的"):
+        check("T37-3 人名/正文不再整类跳过：%s" % s[:20],
+              not ait.looks_like_protected_text(
+                  "configs/text/character_name/table.xml", s))
     for s in ("Привет, сталкер. Как дела?", "Настройки",
               "Найди документы в подвале."):
-        check("T37-2 正常正文不保护：%s" % s[:24],
+        check("T37-4 正常正文不保护：%s" % s[:24],
               not ait.looks_like_protected_text(
                   "configs/text/rus/table.xml", s))
 
@@ -1839,6 +1856,114 @@ def t39_reference_wiring():
 
 
 # ----------------------------------------------------------------------
+# T40 源语言 rus 优先 + 语言标签保留 + 脚本/XML 字面文本层
+# ----------------------------------------------------------------------
+def t40_source_tags_literals():
+    print()
+    print("--- T40 源语言/标签/字面文本 ---")
+    root = tempfile.mkdtemp(prefix="ait_lit_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "dialogs"))
+    os.makedirs(os.path.join(ind, "configs", "ui"))
+    os.makedirs(os.path.join(ind, "scripts"))
+
+    def w(rel, s, enc="utf-8"):
+        path = os.path.join(ind, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with io.open(path, "w", encoding=enc, newline="\n") as f:
+            f.write(s)
+
+    w(os.path.join("configs", "text", "dialogs", "table.xml"), """<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+<string id="a"><rus>Привет, сталкер.</rus><eng>Hello, stalker.</eng></string>
+</string_table>
+""")
+    w(os.path.join("configs", "ui", "test.xml"),
+      "<ui><text>Привет из UI</text></ui>\n")
+    w(os.path.join("scripts", "test.script"),
+      'local news_text = "Привет из скрипта."\n')
+    srv = _FakeServer(fn=lambda t: "译[" + t + "]")
+    try:
+        job, ok, logs = _run_ref_job(ait, ind, out, srv,
+                                    translate_literals=True,
+                                    protect_proper=False)
+        text = io.open(os.path.join(out, "configs", "text", "dialogs",
+                                    "table.xml"), encoding="utf-8").read()
+        check("T40-1 源语言默认 rus，不翻 eng",
+              "译[Привет, сталкер.]" in text and "Hello, stalker." in text
+              and "译[Hello" not in text)
+        check("T40-2 保留 <rus>/<eng> 标签（不再只剩 <text>）",
+              "<rus>" in text and "<eng>" in text and "<text>" not in text)
+        ui = io.open(os.path.join(out, "configs", "ui", "test.xml"),
+                     encoding="utf-8").read()
+        script = io.open(os.path.join(out, "scripts", "test.script"),
+                         encoding="utf-8").read()
+        check("T40-3 UI 字面文本被抽成新 ID",
+              "sgtat_gen_text_" in ui and "Привет из UI" not in ui)
+        check("T40-4 脚本字面文本被抽成新 ID",
+              "sgtat_gen_text_" in script and "Привет из скрипта." not in script)
+        table = os.path.join(out, "configs", "text", "sgtat_auto_texts.xml")
+        check("T40-5 生成字面文本表", os.path.isfile(table))
+        if os.path.isfile(table):
+            ts = io.open(table, encoding="utf-8").read()
+            check("T40-6 表内有 UI/脚本中文",
+                  "译[Привет из UI]" in ts
+                  and "译[Привет из скрипта.]" in ts)
+        loc = os.path.join(out, "configs", "localization.ltx")
+        ls = io.open(loc, encoding="utf-8").read() if os.path.isfile(loc) else ""
+        check("T40-7 新表已注册到 localization.ltx",
+              "sgtat_auto_texts" in ls and "files" in ls)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T41 清理/硬术语分类/标识符过滤/cp1251 标签保留
+# ----------------------------------------------------------------------
+def t41_cleanup_and_cp1251():
+    print()
+    print("--- T41 清理/硬术语/cp1251 ---")
+    check("T41-1 有有→有（功能词重复清理）",
+          ait.clean_translation_output("有有用的信息吗？") == "有用的信息吗？")
+    check("T41-2 正常叠词不动（看看）",
+          ait.clean_translation_output("去看看情况") == "去看看情况")
+    hard = ait.load_hard_glossary_keys()
+    check("T41-3 对话/界面普通词不进硬术语（Информацию）",
+          "Информацию" not in hard and "Здоровье" not in hard,
+          "hard=%d" % len(hard))
+    check("T41-4 专名类仍进硬术语（Псевдогигант）",
+          "Псевдогигант" in hard)
+    for s in ("resque information", "Courier document", "My map task"):
+        check("T41-5 识别任务/段落名：%s" % s[:22],
+              ait.looks_like_identifier_text(s))
+    check("T41-6 真正俄文不误判为标识符",
+          not ait.looks_like_identifier_text("Безумный снайпер"))
+
+    # cp1251 → UTF-8 时保留 <rus>/<eng>
+    root = tempfile.mkdtemp(prefix="ait_cp_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    raw = ("""<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+<string id="a"><rus>Привет</rus><eng>Hello</eng></string>
+</string_table>
+""").encode("cp1251")
+    open(os.path.join(ind, "configs", "text", "rus", "cp.xml"), "wb").write(raw)
+    srv = _FakeServer(fn=lambda t: "译[" + t + "]")
+    try:
+        job, ok, logs = _run_ref_job(ait, ind, out, srv)
+        text = io.open(os.path.join(out, "configs", "text", "rus", "cp.xml"),
+                       encoding="utf-8").read()
+        check("T41-7 cp1251 转 UTF-8 后保留 <rus>/<eng>",
+              "<rus>译[Привет]</rus>" in text and "<eng>Hello</eng>" in text
+              and "windows-1251" not in text)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1852,7 +1977,8 @@ def main():
                t32_cfgxml_regex_dos, t33_process_lifecycle,
                t34_engine_mem_and_slow_log, t35_reference_layer,
                t36_runtime_tokens, t37_protected_text,
-               t38_noop_bom_preview, t39_reference_wiring):
+               t38_noop_bom_preview, t39_reference_wiring,
+               t40_source_tags_literals, t41_cleanup_and_cp1251):
         try:
             fn()
         except Exception as e:

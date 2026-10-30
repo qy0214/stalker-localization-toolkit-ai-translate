@@ -45,17 +45,17 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.7.4.zip` | 可直接分发的插件包 |
-| `tests/` | 168 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.7.5.zip` | 可直接分发的插件包 |
+| `tests/` | 189 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.7.4`
+- 插件版本：`ai_translate 1.7.5`
 - 当前 zip SHA-256：
-  `3fc74e39ef7472892ad209e9c6130b8bb6ac3461304434615112f33e48e1c871`
+  `f35558f112fec86ec525288ac086837da70d545fd66f0257cc4d4cabbfdfcd66`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
 
@@ -65,7 +65,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.7.4 变更摘要
+## 1.6.0 – 1.7.5 变更摘要
 
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
@@ -102,6 +102,14 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
 - **1.7.2**：继续修卡死 —— llama-server 日志从最大 verbose 降到 `-lv 4`
   （单次 25 MB / 28 万行 → 约 16 KB），GPU 上卡判定仍可用；条目级进度
   （峰值 470 条/秒）改为只写运行日志，界面只保留每 50 个文件一条进度。
+- **1.7.5**：针对新 MOD 的错误率优化 —— 源语言默认 **rus**（不再把英语意译当原文，
+  修掉 all right→“所有 向右”、rest→“休息”这类错误）；去掉“ogg 子串命中就整表
+  跳过”和 name/credits/weapons 整类跳过（实测漏掉 2 万条对话/人名/百科）；
+  cp1251 文本表转 UTF-8 时保留 `<rus>/<eng>` 标签；术语表只强制/提示
+  **专名类**（阵营/地点/生物/物品/人物），对话/界面/任务类普通词不再注入
+  （修 `Информацию→信息`、`Здоровье→生命值`、`Искренне→火花` 等语境错误）；
+  新增脚本/UI 字面文本层：抽到新表、原文件换 ASCII ID、自动注册
+  `localization.ltx`；新增功能词重复清理（有有→有）。
 - **1.7.4**：识别 **ID 引用层**（跨 MOD 通用）。不少 MOD 的 XML/脚本只写条目 ID
   （`<text>some_id</text>`、`game.translate_string("some_id")`），正文在
   `configs/text/**` 的文本表里；旧筛选器把它们当“没有可译文本”全部跳过。
@@ -124,7 +132,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 168 项回归测试
+# 189 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性
