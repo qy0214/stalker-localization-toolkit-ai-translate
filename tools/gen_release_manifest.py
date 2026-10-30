@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.9.0.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.9.1.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.9.0.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.9.1.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.9.0"
+EXPECTED_PLUGIN_VERSION = "1.9.1"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
@@ -62,9 +62,6 @@ EXPECTED_MODELS = {
     "Hy-MT2-1.8B-Q8_0.gguf": (
         "5c3fe0b1408a5ceb0143184ef247b11b579c525f4b02b060e6c851bb76fef1a4",
         1908528192),
-    "HY-MT1.5-1.8B-Q8_0.gguf": (
-        "6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e",
-        1908528288),
 }
 
 # 清理前最后一次工具集发行版的哈希；exe 已从工作区移除，保留记录供发布说明引用。
@@ -339,13 +336,13 @@ def build_manifest() -> dict[str, Any]:
             len(meta["llama"]),
             sorted(set(expected_llama.items()) ^ set(meta["llama"].items())) or "无")))
     checks.append(check(
-        "官方哈希：模型 3 项", meta["models"] == EXPECTED_MODELS,
+        "官方哈希：模型 2 项", meta["models"] == EXPECTED_MODELS,
         "登记 %d 项；不一致：%s" % (
             len(meta["models"]),
             sorted(set(EXPECTED_MODELS.items()) ^ set(meta["models"].items())) or "无")))
     all_hashes = list(meta["llama"].values()) + [v[0] for v in meta["models"].values()]
     checks.append(check(
-        "官方哈希：9 个合法 SHA-256", len(all_hashes) == 9 and
+        "官方哈希：8 个合法 SHA-256", len(all_hashes) == 8 and
         all(re.fullmatch(r"[0-9a-f]{64}", h or "") for h in all_hashes),
         "%d 个" % len(all_hashes)))
     checks.append(check(
@@ -554,7 +551,7 @@ def render_markdown(data: dict[str, Any]) -> str:
     lines.append("")
     lines.append("来源：llama.cpp `b11612` GitHub Release asset digest；"
                  "HuggingFace LFS oid（`tencent/Hy-MT2-7B-GGUF`、"
-                 "`tencent/Hy-MT2-1.8B-GGUF`、`tencent/HY-MT1.5-1.8B-GGUF`）。"
+                 "`tencent/Hy-MT2-1.8B-GGUF`）。"
                  "下载后强制比对，不一致即删除并换源。")
     lines.append("")
     lines.append("## 3. 一致性核对")

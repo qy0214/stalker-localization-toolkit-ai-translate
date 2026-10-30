@@ -41,10 +41,10 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.0",
+    "version": "1.9.1",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
-                   "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
+                   "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
                    "CPU / CUDA 12.4 / CUDA 13.4 / Vulkan 四后端并自动检测显卡；"
                    "内置无限制强制术语库",
 }
@@ -725,9 +725,6 @@ _MODEL_HASHES = {
     "Hy-MT2-1.8B-Q8_0.gguf": (
         "5c3fe0b1408a5ceb0143184ef247b11b579c525f4b02b060e6c851bb76fef1a4",
         1908528192),
-    "HY-MT1.5-1.8B-Q8_0.gguf": (
-        "6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e",
-        1908528288),
 }
 _GH_PROXIES = [
     ("GitHub 直连", "{url}"),
@@ -822,26 +819,10 @@ TIER_PROFILES = {
         "combo": "精准 · Hy-MT2 1.8B Q8_0｜高质量·快速｜上下文16K｜约4GB内存",
         "download": "② 精准 Hy-MT2-1.8B Q8_0（1.8GB · 质量高/精确 · 速度快速）",
         "pos": ("质量：高（新一代小模型，官方称整体超越主流商业翻译 API）\n"
-                "精度：精确，较上代 1.5 在真实场景与指令遵循上明显提升\n"
+                "精度：精确，较上代小模型在真实场景与指令遵循上明显提升\n"
                 "速度：快速（1.8B 轻量，CPU 也明显快于 7B）\n"
                 "上下文：16384 token 质量窗（约 7600 字符/段，超长自动分句）\n"
                 "定位：日常汉化主力，质量/速度最均衡的一档"),
-    },
-    "mt15": {
-        "task": "model_mt15",
-        "file": "HY-MT1.5-1.8B-Q8_0.gguf",
-        "repo_ms": "Tencent-Hunyuan/HY-MT1.5-1.8B-GGUF",
-        "repo_hf": "tencent/HY-MT1.5-1.8B-GGUF",
-        "size_gb": 1.8,
-        "ram_gb": 4,
-        "ctx": 16384,
-        "combo": "神速 · HY-MT1.5 1.8B Q8_0｜实时级·高吞吐｜质量良好｜上下文16K｜约4GB内存",
-        "download": "③ 神速 HY-MT1.5-1.8B Q8_0（1.8GB · 质量良好 · 速度神速）",
-        "pos": ("质量：良好（WMT25 冠军系列，1.8B 性能接近同代 7B）\n"
-                "精度：良好，短对话/物品说明足够可靠；最讲究的文本建议用①精雕\n"
-                "速度：神速（技术报告实测平均响应 0.18 秒，端侧实时定位）\n"
-                "上下文：16384 token 质量窗（约 7600 字符/段，超长自动分句）\n"
-                "定位：上万条文本快速初翻、低配电脑与大批量任务"),
     },
     "custom": {
         "task": None,
@@ -858,13 +839,12 @@ TIER_PROFILES = {
                 "内存选择（经验：7B/Q4 约 8GB，1.8B/Q8 约 4GB，上下文越大越吃内存）"),
     },
 }
-TIER_ORDER = ("7b", "mt2", "mt15", "custom")
-BUILTIN_TIERS = ("7b", "mt2", "mt15")
+TIER_ORDER = ("7b", "mt2", "custom")
+BUILTIN_TIERS = ("7b", "mt2")
 CUSTOM_CTX_CHOICES = (4096, 8192, 16384, 32768)
 TIER_SHORT = {
     "7b": "精雕7B｜质量最高最精确｜速度中等｜8K上下文",
     "mt2": "精准1.8B｜高质量精确｜快速｜16K上下文",
-    "mt15": "神速1.5｜质量良好｜实时0.18秒级｜16K上下文",
     "custom": "自选模型｜本机任意 GGUF｜上下文自定",
 }
 
@@ -960,7 +940,7 @@ TASK_KEY_ORDER = _MODEL_TASK_ORDER + ["bin_cpu", "bin_cuda",
                                     "bin_cuda13", "bin_vulkan"]
 TIER_BY_TASK = {TIER_PROFILES[t]["task"]: t for t in BUILTIN_TIERS}
 TIER_FILE = {t: TIER_PROFILES[t]["file"] for t in BUILTIN_TIERS}
-TIER_ALIAS = {"1b8": "mt2"}
+TIER_ALIAS = {"1b8": "mt2", "mt15": "mt2"}
 
 
 def _fmt_size(n):
@@ -1142,23 +1122,22 @@ def detect_hardware():
         name, vram, driver, cc = nv
         variant = "cuda"          # 默认 12.4；13.4 需用户显式选择
         cuda13_ok = cuda13_supported(driver, cc)
-        tier = "7b" if vram >= 5120 else ("mt2" if vram >= 3072 else "mt15")
+        tier = "7b" if vram >= 5120 else "mt2"
         short = "%s %dGB → CUDA 12.4 + %s%s" % (
             name.replace("NVIDIA GeForce ", ""), round(vram/1024, 1),
-            {"7b": "精雕7B", "mt2": "精准1.8B", "mt15": "神速1.5"}[tier],
+            {"7b": "精雕7B", "mt2": "精准1.8B"}[tier],
             ("（CUDA 13.4 可用）" if cuda13_ok else ""))
         return {"variant": variant, "tier": tier, "gpu_name": name,
                 "vram": vram, "short": short, "driver": driver,
                 "compute_cap": cc, "cuda13_ok": cuda13_ok}
     if discrete_other:
         name, vram = discrete_other
-        tier = "mt2" if vram >= 3072 else "mt15"
+        tier = "mt2"
         return {"variant": "vulkan", "tier": tier, "gpu_name": name,
                 "vram": vram,
-                "short": "%s → Vulkan + %s" % (name,
-                    "精准1.8B" if tier == "mt2" else "神速1.5")}
-    return {"variant": "cpu", "tier": "mt15", "gpu_name": "",
-            "vram": 0, "short": "未检测到独显 → CPU + 神速1.5"}
+                "short": "%s → Vulkan + 精准1.8B" % name}
+    return {"variant": "cpu", "tier": "mt2", "gpu_name": "",
+            "vram": 0, "short": "未检测到独显 → CPU + 精准1.8B"}
 
 
 
@@ -2933,7 +2912,7 @@ def classify_xray_file(full, rel):
 def analyze_input_dir(in_dir, mode="text", log=None, cancel=None,
                       max_files=200000):
     """勘察待翻译目录：文件数 / 体积 / 最大文件 / 最长单条文本，
-    并按三档模型给出超长条数与推荐档位。只读，不修改任何文件。
+    并按内置档位给出超长条数与推荐档位。只读，不修改任何文件。
 
     要逐文件读内容才能统计"最长可译文本"，所以超大目录会明显耗时：
       * 每 500 个文件写一条进度，用户知道它在动；
@@ -3022,8 +3001,6 @@ def analyze_input_dir(in_dir, mode="text", log=None, cancel=None,
         per_tier[t] = sum(c for L, c in hist.items() if L > cap)
     if max_str > safe_chunk_chars(TIER_PROFILES["mt2"]["ctx"]):
         recommend = "7b"
-    elif n_files > 3000:
-        recommend = "mt15"
     else:
         recommend = "mt2"
     return {
@@ -6614,7 +6591,7 @@ class AiTranslateTab(object):
                      "仅供参考", "warn")
         ready = [t for t in TIER_ORDER if self.find_model(t)]
         if rec_tier not in ready:
-            pref = [t for t in (rec_tier, "mt2", "mt15", "7b", "custom")
+            pref = [t for t in (rec_tier, "mt2", "7b", "custom")
                     if t in ready]
             if pref:
                 self.log("推荐的 %s 档模型尚未下载，已改选本机就绪的 %s 档"

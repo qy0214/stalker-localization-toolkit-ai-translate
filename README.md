@@ -4,9 +4,9 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.0（2026-10-30）**：标准术语库 v2（canon/names/technical +
-会话词表）、TM-lite 高重复精确复用；1000 条 A/B 术语采纳率 96.8% vs 35.7%；
-复杂文本表 800 条 + 大文本表 200 条回归 0 漏译。完整变更见下文。
+**当前版本 1.9.1（2026-10-30）**：标准术语库 v2（canon/names/technical +
+会话词表）、TM-lite 高重复精确复用；1000 条 A/B 术语采纳率 96.8% vs 35.7%；复杂文本表 800 条 +
+大文本表 200 条回归 0 漏译；移除 HY-MT1.5 旧模型档。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -49,29 +49,33 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.0.zip` | 可直接分发的插件包 |
-| `tests/` | 251 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.9.1.zip` | 可直接分发的插件包 |
+| `tests/` | 255 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.0`
+- 插件版本：`ai_translate 1.9.1`
 - 当前 zip SHA-256：
-  `290584721b8fad613654a4470c567440e8d270684028cad6937cb3706faec53c`
-- 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
+  `1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40`
+- 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 8855 条 / `stalker_termbase.json` 8855 条；
   canon 1377 / names 3068 / technical 18 / reference 148
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.0.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.1.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.0 变更摘要
+## 1.6.0 – 1.9.1 变更摘要
 
+- **1.9.1**：移除 **HY-MT1.5-1.8B** 旧模型档（旧版对提示词/术语约束的指令遵循较弱，
+  容易把术语提示和系统规则当成可选建议）。内置模型收敛为 7B 与 Hy-MT2 1.8B 两档，
+  自选 GGUF 仍保留；旧配置里的 `mt15` 自动迁移到 `mt2`，无独显/低显存也推荐
+  Hy-MT2 1.8B。
 - **1.9.0**：标准术语库 v2 —— 随包库明确分成 canon（1377 硬词）/
   names（3068 人物软层）/ technical（18 条整条精确）/ reference（148 条参考软词）；
   运行时索引补 ё/е 变体归一、拼写变体映射、names 与小写拉丁 canon 的首字母
@@ -165,7 +169,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.0.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 251 项回归测试
+# 255 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性
@@ -205,7 +209,7 @@ python tools/regress_complex_large.py
 下载地址由插件内置；镜像只负责传输，校验值来自发布方元数据：
 
 - llama.cpp `b11612`：GitHub Release asset digest
-- Hy-MT2 7B / 1.8B、HY-MT1.5 1.8B：HuggingFace LFS oid
+- Hy-MT2 7B / 1.8B：HuggingFace LFS oid
 
 完整哈希表见 `RELEASE_MANIFEST.md` 第 2 节。
 

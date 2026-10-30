@@ -36,7 +36,7 @@
 
 ## 3. Hy-MT 模型
 
-- 模型：Hy-MT2-7B / Hy-MT2-1.8B / HY-MT1.5-1.8B（腾讯混元）
+- 模型：Hy-MT2-7B / Hy-MT2-1.8B（腾讯混元）
 - 许可证：Apache-2.0
 - 使用方式：不随本仓库分发，插件在用户机器上按 HuggingFace LFS oid 校验后下载。
 

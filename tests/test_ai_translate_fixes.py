@@ -2448,6 +2448,47 @@ def t49_placeholder_retry():
 
 
 # ----------------------------------------------------------------------
+# T50 移除 HY-MT1.5 旧档
+# ----------------------------------------------------------------------
+def t50_remove_mt15_tier():
+    print()
+    print("--- T50 移除 HY-MT1.5 旧档 ---")
+    check("T50-1 旧档不再出现在任何档位/下载/哈希表",
+          "mt15" not in ait.TIER_PROFILES
+          and "mt15" not in ait.TIER_ORDER
+          and "mt15" not in ait.BUILTIN_TIERS
+          and "mt15" not in ait.TIER_FILE
+          and "model_mt15" not in ait.DOWNLOAD_TASKS
+          and "HY-MT1.5-1.8B-Q8_0.gguf" not in ait._MODEL_HASHES
+          and all("神速" not in x for x in ait.TIER_LABELS))
+    check("T50-2 旧配置 mt15 自动迁移到 mt2",
+          ait.TIER_ALIAS.get("mt15") == "mt2")
+    cfg_path = ait._CONFIG
+    backup = open(cfg_path, "rb").read() if os.path.exists(cfg_path) else None
+    try:
+        with io.open(cfg_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write('{"tier": "mt15", "model_dir": ""}')
+        cfg = ait.load_config()
+        check("T50-3 load_config 迁移旧档", cfg.get("tier") == "mt2",
+              str(cfg.get("tier")))
+    finally:
+        if backup is not None:
+            open(cfg_path, "wb").write(backup)
+        elif os.path.exists(cfg_path):
+            os.remove(cfg_path)
+    real_nv, real_gpu = ait.detect_nvidia_gpu, ait.detect_all_gpus
+    try:
+        ait.detect_nvidia_gpu = lambda: None
+        ait.detect_all_gpus = lambda: []
+        hw = ait.detect_hardware()
+        check("T50-4 无独显推荐 mt2，不再回落到旧档",
+              hw.get("tier") == "mt2" and "神速" not in hw.get("short", ""),
+              str(hw))
+    finally:
+        ait.detect_nvidia_gpu, ait.detect_all_gpus = real_nv, real_gpu
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -2466,7 +2507,7 @@ def main():
                t42_script_context_and_english,
                t43_multiline_profanity_retry, t44_problem_file_filters,
                t45_term_layers_session_cache, t46_anthology_terms,
-               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry):
+               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry, t50_remove_mt15_tier):
         try:
             fn()
         except Exception as e:

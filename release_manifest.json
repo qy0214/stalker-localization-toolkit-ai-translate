@@ -1,38 +1,26 @@
 {
-  "generated_at": "2026-10-30T20:50:00+08:00",
+  "generated_at": "2026-10-30T21:00:14+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "8877a16",
+    "commit": "8e0419c",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
       "M .github/workflows/ci.yml",
       " M README.md",
-      " D dist/ai_translate_plugin_v1.7.5.zip",
+      " M THIRD_PARTY_NOTICES.md",
+      " D dist/ai_translate_plugin_v1.9.0.zip",
       " M plugins/ai_translate.py",
-      " M plugins/ai_translate_assets/glossary_builtin.json",
-      " M plugins/ai_translate_assets/stalker_termbase.json",
       " M tests/test_ai_translate_fixes.py",
-      " M tools/README.md",
-      " M tools/build_termbase.py",
-      " M tools/stalker_termbase.json",
       " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\"",
-      " M \"\\346\\234\\257\\350\\257\\255\\345\\272\\223_\\345\\244\\204\\347\\220\\206\\350\\256\\260\\345\\275\\225.md\"",
-      " M \"\\346\\234\\257\\350\\257\\255\\345\\272\\223_\\345\\244\\247\\345\\260\\217\\345\\206\\231\\345\\206\\262\\347\\252\\201\\346\\270\\205\\345\\215\\225.md\"",
-      "?? dist/ai_translate_plugin_v1.9.0.zip",
-      "?? tools/ab_glossary_1000.py",
-      "?? tools/anthology_merge_report.md",
-      "?? tools/anthology_terms_soft.json",
-      "?? tools/audit_termbase.py",
-      "?? tools/build_mod_terms.py",
-      "?? tools/build_multisource_terms.py"
+      "?? dist/ai_translate_plugin_v1.9.1.zip"
     ]
   },
   "versions": {
-    "plugin_version": "1.9.0",
-    "expected_plugin_version": "1.9.0",
+    "plugin_version": "1.9.1",
+    "expected_plugin_version": "1.9.1",
     "target_toolkit": "STALKER Localization Toolkit 1.1.0",
     "historical_exe_version": "1.1.0.0"
   },
@@ -41,16 +29,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 296747,
-      "sha256": "58ff706017cb8fc5097aee2c6654ed9114eec55b930d89250fb8f76f70db1200",
+      "size": 295378,
+      "sha256": "1017ece195c5cff1d90f4840b70d6e289eadbf34094ef49110355a57a946bd01",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
-      "path": "dist\\ai_translate_plugin_v1.9.0.zip",
+      "path": "dist\\ai_translate_plugin_v1.9.1.zip",
       "exists": true,
-      "size": 328762,
-      "sha256": "290584721b8fad613654a4470c567440e8d270684028cad6937cb3706faec53c",
+      "size": 328309,
+      "sha256": "1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40",
       "note": "当前发布包"
     },
     {
@@ -89,8 +77,8 @@
       "role": "使用说明",
       "path": "使用说明.txt",
       "exists": true,
-      "size": 23664,
-      "sha256": "38e0f1a5bf658e7d1573322aea64de48b93edb9a0db241fc3916fdfa8f041a7a",
+      "size": 23920,
+      "sha256": "2fc623af73fc8f8ecb4c9fff3a046a37f227afe9fe7c4f74840455e64dec002b",
       "note": "含发布包 SHA-256"
     },
     {
@@ -119,8 +107,8 @@
     }
   ],
   "zip": {
-    "path": "dist\\ai_translate_plugin_v1.9.0.zip",
-    "sha256": "290584721b8fad613654a4470c567440e8d270684028cad6937cb3706faec53c",
+    "path": "dist\\ai_translate_plugin_v1.9.1.zip",
+    "sha256": "1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -164,10 +152,6 @@
       "Hy-MT2-1.8B-Q8_0.gguf": {
         "sha256": "5c3fe0b1408a5ceb0143184ef247b11b579c525f4b02b060e6c851bb76fef1a4",
         "bytes": 1908528192
-      },
-      "HY-MT1.5-1.8B-Q8_0.gguf": {
-        "sha256": "6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e",
-        "bytes": 1908528288
       }
     }
   },
@@ -180,12 +164,12 @@
     {
       "check": "插件版本 == 预期",
       "ok": true,
-      "detail": "PLUGIN_INFO 1.9.0 / 预期 1.9.0"
+      "detail": "PLUGIN_INFO 1.9.1 / 预期 1.9.1"
     },
     {
       "check": "zip 文件名含插件版本",
       "ok": true,
-      "detail": "ai_translate_plugin_v1.9.0.zip"
+      "detail": "ai_translate_plugin_v1.9.1.zip"
     },
     {
       "check": "zip 条目 == 5 个预期文件",
@@ -208,14 +192,14 @@
       "detail": "登记 6 项；不一致：无"
     },
     {
-      "check": "官方哈希：模型 3 项",
+      "check": "官方哈希：模型 2 项",
       "ok": true,
-      "detail": "登记 3 项；不一致：无"
+      "detail": "登记 2 项；不一致：无"
     },
     {
-      "check": "官方哈希：9 个合法 SHA-256",
+      "check": "官方哈希：8 个合法 SHA-256",
       "ok": true,
-      "detail": "9 个"
+      "detail": "8 个"
     },
     {
       "check": "官方哈希：llama.cpp 标签 b11612",
@@ -265,12 +249,12 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "290584721b8fad61…"
+      "detail": "1564366f80ed6188…"
     },
     {
       "check": "使用说明含插件版本",
       "ok": true,
-      "detail": "ai_translate 1.9.0"
+      "detail": "ai_translate 1.9.1"
     },
     {
       "check": "dist 只保留当前版本 zip",
@@ -338,7 +322,7 @@
     "note": "2026-10-23 清单记录；文件已在清理中移除"
   },
   "tracked": {
-    "files": 28,
-    "bytes": 17854072
+    "files": 42,
+    "bytes": 18643329
   }
 }

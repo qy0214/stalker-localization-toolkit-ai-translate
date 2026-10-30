@@ -1,29 +1,29 @@
 # AI 离线翻译插件 · 发布清单
 
-- 生成时间：`2026-10-30T20:50:00+08:00`
+- 生成时间：`2026-10-30T21:00:14+08:00`
 - 工作区：仓库根目录
 - 范围：**AI 离线翻译插件（ai_translate）**
-- Git：`main` @ `8877a16`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
-- 已跟踪文件：28 个，17.03 MB
+- Git：`main` @ `8e0419c`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
+- 已跟踪文件：42 个，17.78 MB
 
 ## 1. 版本与交付物
 
 | 项 | 值 |
 |---|---|
-| 插件版本 | `1.9.0` |
-| 预期版本 | `1.9.0` |
+| 插件版本 | `1.9.1` |
+| 预期版本 | `1.9.1` |
 | 适用工具集 | `STALKER Localization Toolkit 1.1.0` |
 | 历史 exe FileVersion | `1.1.0.0` |
 
 | 角色 | 路径 | 大小 | SHA-256 | 说明 |
 |---|---|---:|---|---|
-| 插件分享副本 | `plugins\ai_translate.py` | 289.79 KB | `58ff706017cb8fc5097aee2c6654ed9114eec55b930d89250fb8f76f70db1200` | 纯标准库，保留必要安全说明 |
-| 插件发布 zip | `dist\ai_translate_plugin_v1.9.0.zip` | 321.06 KB | `290584721b8fad613654a4470c567440e8d270684028cad6937cb3706faec53c` | 当前发布包 |
+| 插件分享副本 | `plugins\ai_translate.py` | 288.46 KB | `1017ece195c5cff1d90f4840b70d6e289eadbf34094ef49110355a57a946bd01` | 纯标准库，保留必要安全说明 |
+| 插件发布 zip | `dist\ai_translate_plugin_v1.9.1.zip` | 320.61 KB | `1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40` | 当前发布包 |
 | 术语库（随包，只读） | `plugins\ai_translate_assets\glossary_builtin.json` | 303.59 KB | `5b4e3dffe8d3001640aa3838bafc207d9519aee8e07313a826003377362eb73a` | 运行时匹配的内置层 |
 | 术语基表（分类） | `plugins\ai_translate_assets\stalker_termbase.json` | 341.51 KB | `761e46e8e519a6ee1399c079a7c3ac9e79607a691cf847cfbb35e31f84b9b594` | 导入用 |
 | X-Ray 解析器 | `plugins\ai_translate_assets\xray_pkg.zip` | 7.38 KB | `2f3e1dcd4b2ce701e981d5c0f3e6c16cf17782692a5a892aa9cb1e159e63f8a6` | 解析 XML/LTX/脚本 |
 | 第三方来源声明 | `plugins\ai_translate_assets\THIRD_PARTY_NOTICES.txt` | 1.18 KB | `d971f8c84ae81732effb86d0b3bb907166e81a2c804cf85207a0427f9b929d4e` | 随包分发（上游来源与许可状态） |
-| 使用说明 | `使用说明.txt` | 23.11 KB | `38e0f1a5bf658e7d1573322aea64de48b93edb9a0db241fc3916fdfa8f041a7a` | 含发布包 SHA-256 |
+| 使用说明 | `使用说明.txt` | 23.36 KB | `2fc623af73fc8f8ecb4c9fff3a046a37f227afe9fe7c4f74840455e64dec002b` | 含发布包 SHA-256 |
 | 术语库处理记录 | `术语库_处理记录.md` | 7.46 KB | `f1fc7dcb011089faa8afea3cb85a96ee0216983cc1ae3d7274e50b5bbe050f02` | 术语口径与修剪记录 |
 | 大小写冲突清单 | `术语库_大小写冲突清单.md` | 2.14 KB | `af055d54613945daadecb43f896985200d8a9624376fc585803aa1cd9ac9c0fa` | 术语大小写冲突处理 |
 | 历史工具集 exe | `STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe` | 3.19 MB | `171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947` | 2026-10-23 清单记录；文件已在清理中移除 |
@@ -42,23 +42,22 @@
 | llama.cpp `cudart-13.4` | `cudart-llama-bin-win-cuda-13.4-x64.zip` | — | `738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668` |
 | 模型 | `Hy-MT2-7B-Q4_K_M.gguf` | 4624648896 | `9f96256500f3fc1ab4d64336b58f52a949a95ad7516b0c229476eef782f9f77b` |
 | 模型 | `Hy-MT2-1.8B-Q8_0.gguf` | 1908528192 | `5c3fe0b1408a5ceb0143184ef247b11b579c525f4b02b060e6c851bb76fef1a4` |
-| 模型 | `HY-MT1.5-1.8B-Q8_0.gguf` | 1908528288 | `6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e` |
 
-来源：llama.cpp `b11612` GitHub Release asset digest；HuggingFace LFS oid（`tencent/Hy-MT2-7B-GGUF`、`tencent/Hy-MT2-1.8B-GGUF`、`tencent/HY-MT1.5-1.8B-GGUF`）。下载后强制比对，不一致即删除并换源。
+来源：llama.cpp `b11612` GitHub Release asset digest；HuggingFace LFS oid（`tencent/Hy-MT2-7B-GGUF`、`tencent/Hy-MT2-1.8B-GGUF`）。下载后强制比对，不一致即删除并换源。
 
 ## 3. 一致性核对
 
 | 检查 | 结果 | 说明 |
 |---|---|---|
 | 插件语法 | 一致 | compile() 通过 |
-| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.0 / 预期 1.9.0 |
-| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.0.zip |
+| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.1 / 预期 1.9.1 |
+| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.1.zip |
 | zip 条目 == 5 个预期文件 | 一致 | 多出：无；缺少：无 |
 | zip 不含空目录/运行库/模型/日志 | 一致 | 干净 |
 | zip 内文件 == 分享副本 | 一致 | 全部一致 |
 | 官方哈希：llama.cpp 6 项 | 一致 | 登记 6 项；不一致：无 |
-| 官方哈希：模型 3 项 | 一致 | 登记 3 项；不一致：无 |
-| 官方哈希：9 个合法 SHA-256 | 一致 | 9 个 |
+| 官方哈希：模型 2 项 | 一致 | 登记 2 项；不一致：无 |
+| 官方哈希：8 个合法 SHA-256 | 一致 | 8 个 |
 | 官方哈希：llama.cpp 标签 b11612 | 一致 | 源码常量 |
 | 分享包不含 bin/models/logs/downloads/config.json | 一致 | 干净 |
 | 无绝对路径/用户名泄漏 | 一致 | 未发现 |
@@ -68,8 +67,8 @@
 | 术语库：随包条目 >= 8000 | 一致 | 8855 条 |
 | 术语库：随包 >= 分类基表 | 一致 | 8855 / 8855 |
 | 使用说明含 exe SHA-256 | 一致 | 171ce0028151d06b… |
-| 使用说明含当前 zip SHA-256 | 一致 | 290584721b8fad61… |
-| 使用说明含插件版本 | 一致 | ai_translate 1.9.0 |
+| 使用说明含当前 zip SHA-256 | 一致 | 1564366f80ed6188… |
+| 使用说明含插件版本 | 一致 | ai_translate 1.9.1 |
 | dist 只保留当前版本 zip | 一致 | 仅当前版本 |
 
 ## 4. 术语数据规模
@@ -96,7 +95,7 @@
 
 ```powershell
 # 校验当前插件 zip
-Get-FileHash 'dist\ai_translate_plugin_v1.9.0.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.1.zip' -Algorithm SHA256
 
 # 重新生成清单
 python tools/gen_release_manifest.py
