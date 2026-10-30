@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.7.5",
+    "version": "1.9.0",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元三档模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -423,8 +423,90 @@ def _assign_server_to_kill_job(proc):
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) STALKER-Localization-Toolkit/ai-translate"
 
-LANG_FULL = {"chs": "简体中文", "eng": "English", "rus": "Русский", "ukr": "Українська"}
+LANG_FULL = {"chs": "简体中文", "eng": "英语", "rus": "俄语", "ukr": "乌克兰语"}
 LANG_CODE = {"chs": "zh", "eng": "en", "rus": "ru", "ukr": "uk"}
+
+# 通用技术精确表：只做整条精确匹配，绝不子串替换。
+# 这些短标签模型通常保留原文；不放进核心硬词，避免影响正文。
+_TECHNICAL_EXACT = {
+    "ч.": "小时", "ч": "小时", "час": "小时", "часа": "小时",
+    "сек": "秒", "сек.": "秒", "м/с": "米/秒", "в/мин": "发/分钟",
+    "шт": "个", "шт.": "个", "р.": "卢布", "руб.": "卢布",
+    "дБм.": "分贝毫瓦", "дБм": "分贝毫瓦", "м.": "米", "м": "米",
+    "RU": "俄语", "FX": "特效",
+}
+
+# 会话词表：当前 MOD 的人名/物品/地点候选，自动翻译并缓存。
+# 它不是随包术语库，不需要为每个 MOD 手工建档；缓存只在本机。
+_SESSION_TERM_NOTE = (
+    "这是游戏名词表。逐行译成简体中文，保持行数与顺序；"
+    "人名音译，绰号/物品/地点按游戏习惯意译；"
+    "不要编号、不要解释、不要保留俄文或英文原文。")
+_SESSION_QUOTES = "\"'«»“”‘’"
+_SESSION_NAME_DIRS = ("character_name", "snames", "fnames", "bio")
+_SESSION_ITEM_DIRS = ("item", "weapon", "equipment", "artefact",
+                      "artifact", "arsenal")
+_SESSION_LOC_DIRS = ("mapspot", "level", "place", "zone")
+_SESSION_SKIP_DIRS = ("dialog", "news", "task", "tip", "stash", "secret",
+                      "credits", "ui", "gameplay", "spawn", "npc")
+_SESSION_LIMITS = {"人物与军衔": 1500, "物品·武器·装备·神器": 500,
+                   "地点与区域": 400, "阵营与组织": 150, "变异生物": 100}
+
+# TM-lite：只在“同一批文本里重复句比例高”时启用**精确同源**复用。
+# 不做模糊匹配、不建跨 MOD 持久库、不把上一次任务的译文混进来。
+# 实测 NS7 182 张表：全局重复率 7.4%，5 张表 ≥20%（1,482 条）；
+# 阈值 20% 正好把“名字/任务/新闻模板”这类高重复表挑出来，普通对话表
+# 不会因为零星重复而改变翻译路径。
+TM_LITE_MIN_RATIO = 0.20
+TM_LITE_MIN_ENTRIES = 40
+
+
+def session_category(rel, eid):
+    """会话词表只收“名字型”条目；对话框/新闻/任务/署名不碰。"""
+    s = (rel or "").lower().replace("\\", "/")
+    k = (eid or "").lower()
+    if any(x in s for x in _SESSION_SKIP_DIRS):
+        return None
+    if any(x in s for x in _SESSION_NAME_DIRS):
+        if k.endswith(("_bio", "_descr", "_desc", "_text", "_hint")):
+            return None
+        if k.endswith("_name") or "snames" in s or "fnames" in s:
+            return "人物与军衔"
+        return None
+    if any(x in s for x in ("faction", "community")):
+        return "阵营与组织"
+    if any(x in s for x in _SESSION_ITEM_DIRS):
+        if k.endswith(("_descr", "_desc", "_bio", "_text", "_hint")):
+            return None
+        return "物品·武器·装备·神器"
+    if any(x in s for x in ("creature", "mutant", "monster")):
+        return "变异生物"
+    if any(x in s for x in _SESSION_LOC_DIRS):
+        return "地点与区域"
+    return None
+
+
+def session_term_shape(src, cat):
+    """名词形状：短、无句末标点；人名允许缩写点。"""
+    s = (src or "").strip().strip(_SESSION_QUOTES).strip()
+    if not s or len(s) > 60 or "\n" in s or "\r" in s:
+        return ""
+    words = s.split()
+    if not (1 <= len(words) <= 5):
+        return ""
+    if cat == "人物与军衔":
+        if re.search(r"[。！？!?；;:]", s):
+            return ""
+        if re.match(r"^[А-ЯЁA-Z]\.\s*[А-ЯЁA-Z]?\.?\s*[А-ЯЁA-Z]", s):
+            return s
+        if s[0].isupper():
+            return s
+        return ""
+    if re.search(r"[.!?。！？；;:，,]", s):
+        return ""
+    if not re.search(r"[А-Яа-яЁёA-Za-z]", s):
+        return ""
+    return s
 
 TRANSLATION_SYS_PROMPT = (
     "你是《潜行者 S.T.A.L.K.E.R.》后末日游戏的专业译员，"
@@ -449,6 +531,14 @@ TRANSLATION_SYS_PROMPT = (
     "башку оторву 就是「拧下你的脑袋」，不是「我不会放过你」）；"
     "原文粗俗则译文粗俗，不得因内容而回避或粉饰；\n"
     "6. 只输出译文本身，不加任何解释或说明；原文已是目标语言时原样返回。\n"
+    "7. 术语提示只在语义相符时采用：同一拼写在普通语境（例如 крот=鼹鼠）\n"
+    "不要硬套人名译名；同一人物、物品、地名全篇保持同一个译名。\n"
+    "8. 输入是格变、复数、单数片段或半句时，按词库和上下文还原语义后\n"
+    "译成中文，不要保留原文，也不要只译一半。\n"
+    "9. 保留原文的换行数量与段落数；不要把两段合并成一段，也不要多加空行。\n"
+    "10. 反问、讽刺、威胁按说话人的意图译，不要逐字翻转否定："
+    "«Ну а на хрен тебе не пойти?» 是「你他妈怎么还不滚？」，"
+    "不是「你别去了吧」。\n"
     "\n"
     "口语对照示例（左为生硬译法，右为地道中文；照右边的路子写）：\n"
     "· 「听着，我有件事要告诉你。」→「哎，我有事找你。」\n"
@@ -456,6 +546,96 @@ TRANSLATION_SYS_PROMPT = (
     "· 「我不知道你该如何做到这一点。」→「我不知道你咋弄，反正东西我得要。」\n"
     "· 「你明白正在发生什么吗？」→「你懂现在发生啥了吗？」"
 )
+
+# 英语源文专用提示词。规则与俄语版相同，但把术语/粗口/口语锚例换成
+# 英语里最常见的误译点：小模型容易把英语委婉化、书面化，或把习语逐词直译。
+TRANSLATION_SYS_PROMPT_EN = (
+    "你是《潜行者 S.T.A.L.K.E.R.》后末日游戏的专业译员，"
+    "输入可能是英语的对话、任务、物品或界面文本。严格遵守：\n"
+    "1. 下列内容逐字保留、数量与顺序不变：占位符（%s、%d、%1$s）、"
+    "控制符（$$ACTION$$、$变量）、脚本与条目ID（如 zat_b101_x、"
+    "sgtat_gen_text_1_x、a.b.c）、\\n；任何疑似代码或标记一律照抄勿译；\n"
+    "2. 人名、阵营、地名、怪物、武器物品等专名使用游戏约定译名；"
+    "有官方中文名的用官方名，没有的按常见音译，首次出现后保持统一；"
+    "缩写、型号、代号（AK-74、PDA、SEVA）保留原文，不要硬造中文；\n"
+    "3. 忠实完整，不增译、不漏译、不脑补剧情；英语的冠词、助动词、"
+    "重复主语不要逐词搬进中文；\n"
+    "4. 译文必须是地道的中文口语，读起来要像中国玩家自己在说话："
+    "用中文的语序、短句和中文习惯的省略与断句，不要翻译腔"
+    "（不要「我不得不说」「就……而言」「如此」「因此」「并且」这类欧化说法，"
+    "不要生硬的被动句，不要把从句堆成长句，不要连缀多余的「的」）；"
+    "英语习语按中文口语意译（例如 It's a piece of cake → 小菜一碟），"
+    "不要逐词硬译；称呼、亲疏、口气与情绪贴合说话人身份，"
+    "自然使用「啊、吧、嘛、呢、唉、喂」等语气词；"
+    "但物品名称、按钮、菜单项这类短标签保持简洁直白，不口语化、不加语气词；\n"
+    "5. 粗话、脏话、辱骂、俚语、威胁、黑色幽默与残酷描写一律按原文原意直译，"
+    "保留同等粗鲁力度与情绪强度：不得弱化、省略、删除或改写，"
+    "不得替换成书面语、委婉语或文雅说法（fuck 就是「操／妈的」，"
+    "shit 就是「屎／狗屎」，不是「糟糕」；shut up 就是「闭嘴」，"
+    "不是「请安静」；I'll rip your head off 就是「我拧下你的脑袋」，"
+    "不是「我不会放过你」）；原文粗俗则译文粗俗，不得因内容而回避或粉饰；\n"
+    "6. 只输出译文本身，不加任何解释或说明；原文已是中文时原样返回；"
+    "不要把英文原文抄进译文，也不要把规则复述出来。\n"
+    "7. 术语提示只在语义相符时采用；同一人物、物品、地名全篇保持同一个译名；"
+    "普通语境里的同形词不要硬套专名译名。\n"
+    "8. 输入是复数、缩写、单数片段或半句时，按词库和上下文还原语义后译成中文，"
+    "不要保留英文原文。\n"
+    "9. 保留原文的换行数量与段落数；不要把两段合并成一段，也不要多加空行。\n"
+    "10. 反问、讽刺、威胁按说话人的意图译，不要逐字翻转否定："
+    "「Why don't you just leave?」是「你他妈怎么还不滚？」，"
+    "不是「你为什么不离开」。\n"
+    "\n"
+    "英语口语对照示例（左为生硬译法，右为地道中文；照右边的路子写）：\n"
+    "· 「Listen, I've got something to tell you.」→「哎，我有事找你。」\n"
+    "· 「We can't stay here anymore.」→「这儿咱待不下去了。」\n"
+    "· 「I don't know how you're going to do it.」→「我不知道你咋弄，反正东西我得要。」\n"
+    "· 「Do you understand what's going on?」→「你懂现在发生啥了吗？」\n"
+    "· 「Get out of my sight.」→「滚，别让我看见你。」\n"
+    "· 「You're a dead man.」→「你死定了。」"
+)
+
+# 模型偶尔会把整段系统提示词当译文回显。用固定锚点做硬校验，
+# 不依赖提示词本身（换提示词时只需保留这些锚点）。
+_PROMPT_ECHO_MARKERS = (
+    "你是《潜行者",
+    "S.T.A.L.K.E.R.》后末日游戏的专业译员",
+    "只输出译文本身",
+    "口语对照示例",
+    "术语(用给定译名)",
+)
+
+
+def looks_like_prompt_echo(text):
+    s = text or ""
+    return any(marker in s for marker in _PROMPT_ECHO_MARKERS)
+
+
+_RU_PROFANITY_RE = re.compile(
+    r"дерьм|заткн|хрен|чёрт|черт|бля|хуй|пизд|ебат|еб[ао]|говн|суч|"
+    r"сдох|жоп|муд[ао]|уёб|уеб|нахуй|иди ты|пошёл ты|пошел ты", re.I)
+_ZH_PROFANITY_RE = re.compile(
+    r"他妈|妈的|操(?:你|他|她|它|死|蛋|逼|屄)|我操|"
+    r"靠[！!。.，,]|滚(?:蛋|开|！|!|。|，)|闭嘴|混蛋|畜生|王八|去死|"
+    r"该死|见鬼|鸡巴|屌|日你|找死|活腻|屎|狗屎|放屁")
+_PROFANITY_RETRY_NOTE = (
+    "本句原文含粗口、辱骂或威胁，必须保留同等粗鲁力度：不得弱化、"
+    "删除或改成书面语。按原文直译，例如 на хрен→他妈/滚，"
+    "дерьмо→屎/狗屎，заткнись→闭嘴。")
+_PLACEHOLDER_RETRY_NOTE = (
+    "必须逐字保留输入里的 $$R0$$、$$R1$$ 等控制占位符，"
+    "数量、顺序和写法都不能改；只翻译占位符以外的正文。")
+
+
+def has_source_profanity(text):
+    return bool(_RU_PROFANITY_RE.search(text or ""))
+
+
+def has_zh_profanity(text):
+    return bool(_ZH_PROFANITY_RE.search(text or ""))
+
+
+def has_cjk(text):
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
 
 GLOSSARY_HINT_HEADER = "术语(用给定译名)：\n"
 GLOSSARY_HINT_BUDGET = 240
@@ -467,6 +647,17 @@ GLOSSARY_HINT_STOPWORDS = frozenset((
     "кто", "где", "когда", "почти", "всего", "всегда", "очень", "надо",
     "можно", "нужно", "теперь", "потом", "себя", "себе", "свой", "свою",
     "один", "два", "три", "без", "под", "над", "про", "при", "между",
+)) | frozenset((
+    # 英语源文同样要过滤功能词，否则术语提示预算会被 the/a/of 吃掉。
+    "the", "a", "an", "of", "to", "in", "on", "at", "for", "and", "or",
+    "is", "are", "was", "were", "be", "been", "being", "with", "by",
+    "from", "this", "that", "these", "those", "it", "its", "as", "not",
+    "no", "yes", "you", "your", "yours", "he", "she", "they", "we", "i",
+    "me", "my", "our", "their", "his", "her", "them", "us", "do", "does",
+    "did", "can", "could", "will", "would", "should", "may", "might",
+    "must", "have", "has", "had", "so", "but", "if", "then", "than",
+    "also", "very", "just", "there", "here", "what", "which", "who",
+    "whom", "whose", "when", "where", "why", "how", "all", "any", "some",
 ))
 
 
@@ -1153,6 +1344,8 @@ DEFAULT_CONFIG = {
     "protect_proper_v2": False,
     "src_lang": "auto",
     "mode": "auto",
+    "session_glossary": True,
+    "tm_lite": True,
     "output_anyway": False,
     "prompt_extra": "",
     "artifact_hashes": {},
@@ -1280,33 +1473,115 @@ def load_glossary_layers():
 # 任务、对话/百科类会随语境变化，一律只做软参考或不注入，避免
 # “Здоровье не шалит?”被硬塞成“生命值”这类语境错误。
 _HARD_TERM_CATEGORIES = (
-    "阵营与组织", "人物与军衔", "地点与区域", "变异生物",
-    "物品·武器·装备·神器")
+    # 人物/军衔不再全局硬替换：不同 MOD 的同名人物可能不是同一人。
+    # 人物名由“当前 MOD 会话词表 + 人物表精确命中”处理，见 _build_session_glossary。
+    "阵营与组织", "地点与区域", "变异生物", "物品·武器·装备·神器")
+
+
+_TERMBASE_PATH = os.path.join(_ASSETS, "stalker_termbase.json")
+_TERMBASE_CACHE = {"key": None, "data": {}}
+_DEFAULT_LAYERS = {
+    "canon": list(_HARD_TERM_CATEGORIES),
+    "names": ["人物与军衔"],
+    "technical": ["技术缩写"],
+    "reference": ["ANTHOLOGY 参考"],
+}
+_RISKY_LATIN_RE = re.compile(r"^[a-z][a-z0-9._\-/&()]{1,18}$")
+
+
+def load_termbase_data():
+    """读随包分类术语库（带 mtime 缓存，避免每次命中都重读 350 KB）。"""
+    try:
+        st = os.stat(_TERMBASE_PATH)
+        key = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return {}
+    if _TERMBASE_CACHE.get("key") == key:
+        return _TERMBASE_CACHE.get("data") or {}
+    try:
+        with open(_TERMBASE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    _TERMBASE_CACHE["key"] = key
+    _TERMBASE_CACHE["data"] = data
+    return data
+
+
+def _layer_categories(meta, name):
+    layers = meta.get("layers") if isinstance(meta, dict) else None
+    cats = layers.get(name) if isinstance(layers, dict) else None
+    if isinstance(cats, str):
+        cats = [cats]
+    if not isinstance(cats, list):
+        cats = _DEFAULT_LAYERS.get(name, [])
+    return [str(c) for c in cats if str(c).strip()]
+
+
+def load_term_layers():
+    """返回 v2 四层索引：canon/names/technical/reference + 变体/大小写策略。
+
+    旧版术语库没有 `_meta.layers` 时按原分类回退，导入别人的分类词库也能用。
+    """
+    data = load_termbase_data()
+    meta = data.get("_meta") if isinstance(data.get("_meta"), dict) else {}
+    canon_cats = _layer_categories(meta, "canon")
+    name_cats = _layer_categories(meta, "names")
+    tech_cats = _layer_categories(meta, "technical")
+    ref_cats = _layer_categories(meta, "reference")
+
+    def collect(cats):
+        keys, table = set(), {}
+        for cat in cats:
+            t = data.get(cat)
+            if not isinstance(t, dict):
+                continue
+            for k, v in t.items():
+                name = str(k).strip()
+                if not name or name.startswith("_"):
+                    continue
+                keys.add(name)
+                table[name] = str(v)
+        return keys, table
+
+    canon, _ = collect(canon_cats)
+    names, _ = collect(name_cats)
+    _, technical = collect(tech_cats)
+    _, reference = collect(ref_cats)
+    variants = meta.get("variants") if isinstance(meta.get("variants"),
+                                                 dict) else {}
+    variants = {str(k): str(v) for k, v in variants.items()
+                if str(k).strip() and str(v).strip()}
+    explicit = meta.get("case_sensitive")
+    case_sensitive = ({str(k) for k in explicit if str(k).strip()}
+                      if isinstance(explicit, list) else set())
+    # 人物名与内容型专名按“首字母大小写一致”匹配：英文正文里的
+    # doctor/bar/crystal 这类普通词不会被当成专名。
+    case_sensitive |= names
+    case_sensitive |= {k for k in technical if re.search(r"[A-Za-z]", k)}
+    case_sensitive |= {k for k in canon if _RISKY_LATIN_RE.match(k)}
+    return {"canon": canon, "names": names, "technical": technical,
+            "reference": reference, "variants": variants,
+            "case_sensitive": case_sensitive}
 
 
 def load_hard_glossary_keys():
-    """只把“游戏专名/物品/界面”类术语当硬词；对话/百科类只做参考。
+    """只把 canon 层（阵营/地点/变异体/物品）当硬词；人物名与对话类只做软参考。
 
     builtin 术语表是扁平表，混入了大量新闻/对话里的普通词和屈折形
     （例如 Информацию→信息、Искренне→火花）。这些词强制替换会把
-    句子改坏；按随包 stalker_termbase.json 的分类筛出硬词，
-    普通词不再注入/强制，交给模型按语境判断。
+    句子改坏；按 v2 的 canon 层筛出硬词，普通词不再注入/强制。
     """
-    path = os.path.join(_ASSETS, "stalker_termbase.json")
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return set()
-    keys = set()
-    if not isinstance(data, dict):
-        return keys
-    for cat, table in data.items():
-        if cat.startswith("_") or cat not in _HARD_TERM_CATEGORIES:
-            continue
-        if isinstance(table, dict):
-            keys.update(str(k) for k in table)
-    return keys
+    return set(load_term_layers()["canon"])
+
+
+def load_technical_exact():
+    """数据化技术精确表；随包术语库优先，旧包回退到内置常量。"""
+    out = dict(_TECHNICAL_EXACT)
+    out.update(load_term_layers()["technical"])
+    return out
 
 
 def save_user_glossary(set_map, deleted=None, clear_builtin=False):
@@ -2037,7 +2312,8 @@ class LlamaServer(object):
         raise IOError("等待引擎就绪超时（%s）" % (last_err or "health 无响应"))
 
     def translate(self, text, src_lang, tgt_lang, glossary_hits=None,
-                  timeout_sec=180, max_tokens=None, use_extra=True):
+                  timeout_sec=180, max_tokens=None, use_extra=True,
+                  extra_sys=None, temperature=None):
         """单条翻译请求。被 max_tokens 截断时抛 OutputTruncated（不重试）。
 
         提示词里的语言用**全名**（"俄语"）而不是语言码（"ru"）：小模型对
@@ -2045,13 +2321,18 @@ class LlamaServer(object):
         """
         if not self.is_running():
             raise IOError("引擎未运行")
+        if src_lang in ("auto", "text"):
+            src_lang = detect_text_lang(text) or src_lang
         src = LANG_FULL.get(src_lang)
         tgt = LANG_FULL.get(tgt_lang, tgt_lang)
-        sys_msg = TRANSLATION_SYS_PROMPT
+        sys_msg = (TRANSLATION_SYS_PROMPT_EN if src_lang == "eng"
+                   else TRANSLATION_SYS_PROMPT)
         extra = (getattr(self, "prompt_extra", "") or "").strip() \
             if use_extra else ""
         if extra:
             sys_msg = sys_msg + "\n补充要求（优先遵守）：\n" + extra
+        if extra_sys:
+            sys_msg = sys_msg + "\n补充要求（优先遵守）：\n" + extra_sys
         if src and src_lang not in ("auto", "text"):
             user_msg = "将下面的%s文本翻译为%s：\n%s" % (src, tgt, text)
         else:
@@ -2068,7 +2349,8 @@ class LlamaServer(object):
                 {"role": "system", "content": sys_msg},
                 {"role": "user", "content": user_msg},
             ],
-            "temperature": 0.1,
+            "temperature": (0.1 if temperature is None
+                            else float(temperature)),
             "max_tokens": max_tokens,
             "stream": False,
         }).encode("utf-8")
@@ -2214,6 +2496,7 @@ _CLAUSE_SPLIT = re.compile(r"([，,：:])")
 
 
 _PLACEHOLDER_RE = re.compile(r"\$\$[TR]\d+\$\$")
+_ANY_PLACEHOLDER_RE = re.compile(r"\$\$[A-Za-z0-9_]+\$\$")
 
 # 运行期占位符：脚本变量/格式符/控制符。**必须先 mask 再送模型**：
 # 提示词要求保留并不可靠，实测模型会把 $level/$name 当成普通英文词译成
@@ -2223,7 +2506,9 @@ _RUNTIME_TOKEN_RE = re.compile(
     r"|\$[A-Za-z_][A-Za-z0-9_]*"        # $level / $name
     r"|%c\[[^\]]*\]"                    # %c[255,1,255,255]
     r"|%[-+ #0-9.*$]*[A-Za-z]"          # %s / %d / %1$s
-    r"|\\[nt])")                        # 字面 \n / \t
+    r"|\b[rsg][0-9]?_[a-z0-9_]+\b)")    # r2_details_opt / s_light 等技术后缀
+# 换行/制表不再当“严格占位符”：模型少写一个 \n 就把整条退回原文，
+# 实测 138 条多行描述因此漏译。送翻前换成真实换行，译后统一写回 \n。
 
 
 def mask_runtime_tokens(text):
@@ -2246,6 +2531,40 @@ def restore_runtime_tokens(text, mapping):
     for ph, tok in mapping.items():
         text = text.replace(ph, tok)
     return text
+
+
+def unescape_newlines(text):
+    """送翻前把字面 \\n/\\t 变成真实换行，让模型看到段落结构。"""
+    return (text or "").replace("\\r\\n", "\n").replace("\\n", "\n") \
+        .replace("\\t", "\t")
+
+
+def escape_newlines(text):
+    """译后统一写回字面 \\n/\\t，保持 X-Ray 文本表的存储约定。"""
+    s = (text or "").replace("\r\n", "\n")
+    return s.replace("\n", "\\n").replace("\t", "\\t")
+
+
+def restore_linebreaks(text, count):
+    """模型把多行合并成一行时的确定性兜底：按句末标点补回换行。
+
+    只在输出**一个换行都没有**且句子数足够时生效；不猜测原文行内位置，
+    但至少让每段独立成行，避免整段挤成一行。
+    """
+    if count <= 0 or not text or text.count("\n") > 0:
+        return text
+    parts = [p for p in re.split(r"(?<=[。！？!?…])", text) if p]
+    if len(parts) < count + 1:
+        # 句子不够就退到逗号/破折号，宁可断得碎一点，也不要整段挤一行。
+        parts = [p for p in re.split(r"(?<=[。！？!?…；;，,、])", text) if p]
+    if len(parts) < 2:
+        return text
+    count = min(count, len(parts) - 1)
+    out = []
+    for i, part in enumerate(parts[:-1]):
+        out.append(part + ("\n" if i < count else ""))
+    out.append(parts[-1])
+    return "".join(out)
 
 
 # 专名/歌名/型号保护：只按**结构**判断，不写死任何 MOD 文件名。
@@ -2274,20 +2593,33 @@ _CODE_LIKE_RE = re.compile(r"^[A-Z0-9][A-Z0-9 .\-/_]{1,30}$")
 _COPYRIGHT_RE = re.compile(r"^(?:©|\(c\)|copyright\b)", re.I)
 _DEBUG_LIKE_RE = re.compile(
     r"(?:onItemDrop|npcObj|FAILED\b|sect\s*-|obj\s*:|gvid\s*:|"
-    r"^(?:~|[a-z][a-z0-9_]*\s*:|\[[^\]]+\]|load\b|debug\b|log\b|"
-    r"error\b)|\b(?:teleport\w*|reinit|timer|spawn|task_\w+|check_task|"
-    r"kamps|npcItems|isVisual\w*)\b|\bf[A-Z][A-Za-z]+\b|"
-    r"\b[rsg][0-9]?_[a-z0-9_]+\b|content\s*:)", re.I)
+    r"^(?:~|\[[a-z0-9_:.\- ]+\]$)|"
+    r"\b(?:teleport\w*|reinit|kamps|npcItems|isVisual\w*)\b|"
+    r"content\s*:)", re.I)
 _DEBUG_PHRASES = {"dead", "none", "null", "true", "false",
                   "avail end", "start here", "reinit timer"}
-_FILE_EXT_RE = re.compile(r"\.(?:ppe|anm|ltx|xml|dds|ogg|wav|txt|ini)$",
-                          re.I)
-
 
 def _has_translatable_text(text):
     """剔除运行期占位符后仍有 2 个以上连续字母，才值得送翻。"""
     clean = _RUNTIME_TOKEN_RE.sub("", text or "")
     return bool(re.search(r"[A-Za-zА-Яа-яЁё]{2,}", clean))
+
+
+def detect_text_lang(text):
+    """按字母构成判断单条源文是俄语还是英语。
+
+    X-Ray 的 `<rus>` 字段在不少 MOD 里实际放的是英语；只按字段名选源语言
+    会把英语提示词成俄语。这里只做粗判：西里尔字母占优→rus，拉丁占优→eng；
+    混合专名/缩写不改变主语言；太短（<2 个字母）返回空，交给文件级提示。
+    """
+    s = text or ""
+    cyr = len(re.findall(r"[А-Яа-яЁё]", s))
+    lat = len(re.findall(r"[A-Za-z]", s))
+    if cyr >= 2 and cyr >= lat:
+        return "rus"
+    if lat >= 3 and lat > cyr:
+        return "eng"
+    return ""
 
 
 def looks_like_code_or_debug(rel, text):
@@ -2297,17 +2629,24 @@ def looks_like_code_or_debug(rel, text):
         return True
     if s.lower() in _DEBUG_PHRASES or _COPYRIGHT_RE.match(s):
         return True
-    if _DEBUG_LIKE_RE.search(s) or _FILE_EXT_RE.search(s):
+    if _DEBUG_LIKE_RE.search(s):
         return True
     if s.lower().startswith(("http://", "https://", "www.")):
         return True
-    # 短代号/弹药规格/型号：只含字母数字与 . - / _ 空格，且带数字
-    if (re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9 .\-/_]{0,40}",
-                     s)
-            and any(c.isdigit() for c in s)):
-        return True
-    if _CODE_LIKE_RE.match(s) and any(c.isdigit() for c in s):
-        return True
+    # 短代号/弹药规格：只有“全大写且没有任何小写字母”才跳过。
+    # 旧规则把“Набор 1 / Патроны 9х18мм ПМ / 30 х 5.45x39мм”都当型号，
+    # 实测 459 条正文因此漏译；含小写词的串一律按正文送翻。
+    name_file = any(x in (rel or "").lower() for x in (
+        "character_name", "snames", "fnames", "bio"))
+    zone_file = any(x in (rel or "").lower() for x in (
+        "string_table_enc_zone", "string_table_levels", "mapspots"))
+    if not (name_file or zone_file):
+        if (any(c.isdigit() for c in s)
+                and re.fullmatch(
+                    r"[A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9 .\-/_]{0,40}", s)):
+            return True
+        if _CODE_LIKE_RE.match(s) and any(c.isdigit() for c in s):
+            return True
     return False
 
 
@@ -2321,10 +2660,13 @@ def looks_like_identifier_text(text):
         return True
     # 纯 ASCII、无句末标点、<=6 个词：多为任务/段落/角色/资源名
     # （Courier document / My map task / Gans Wiberg / Karta Name），
-    # 不是用户正文；真正正文通常有西里尔字母或句末标点。
+    # 不是用户正文；但「Disable Info」这类多个首字母大写的界面标签
+    # 是给玩家看的，不能当标识符跳过。
     if (s.isascii() and len(s.split()) <= 6
             and not re.search(r"[.!?。！？]", s)):
-        return True
+        caps = sum(1 for w in s.split() if w[:1].isupper())
+        if caps <= 1:
+            return True
     return False
 
 
@@ -2345,6 +2687,115 @@ def looks_like_protected_text(rel, text):
     """兼容旧接口：结构性噪声或专名。"""
     return (looks_like_code_or_debug(rel, text)
             or looks_like_proper_text(rel, text))
+
+
+# ----------------------------------------------------------------------
+# 脚本字面文本上下文过滤（1.7.6）
+#
+# 上游 getScriptPotentialTexts 会把脚本里**所有**带字母的引号串都抽出来。
+# 1.7.5 实测：63 个脚本、1890 处赋值、46 处 string_find、11 处 string_gsub
+# 被换成裸 ID，逻辑串变成 nil。这里按“这一行在干什么”做保守白名单：
+#   * log/print/debug/error/assert/trace 一律不动；
+#   * string_find/string_gsub/比较运算一律不动（逻辑串）；
+#   * 只改显示类调用和明确的文本变量赋值。
+# 宁可漏几条界面文本，也不能把脚本逻辑改坏。
+# ----------------------------------------------------------------------
+_SCRIPT_LOG_CALL_RE = re.compile(
+    r"\b(?:log1?|log2|log3|log_message|printf|print|debug|error|assert|"
+    r"trace|console|exec)\s*\(", re.I)
+_SCRIPT_LOGIC_CALL_RE = re.compile(
+    r"\b(?:string_find|string_gsub|string_match|string_gmatch|"
+    r"string\.find|string\.gsub|string\.match|string\.gmatch)\s*\(",
+    re.I)
+_SCRIPT_UI_CALL_RE = re.compile(
+    r"\b(?:SetText|SetName|SetTextTip|InitStatic|InitButton|AddText|AddLine|"
+    r"send_tip|hud_msg|add_spot_on_map|give_talk_message|map_add_user_spot|"
+    r"show_message|show_tip|talk_message|send_message|add_news|add_tip|"
+    r"message_box|set_level_changer_invitation)\s*\(", re.I)
+_SCRIPT_ASSIGN_RE = re.compile(
+    r"^\s*(?:local\s+)?(?:self\.|this\.|obj\.)?([A-Za-z_]\w*)\s*=\s*[^=]")
+_SCRIPT_TEXT_VAR_RE = re.compile(
+    r"(?:^|_)(?:text|txt|msg|message|hint|caption|title|descr|description|"
+    r"name|news|label|tip)(?:_|$)", re.I)
+
+
+def strip_script_comment(line):
+    """去掉 -- 行注释，保留引号内的 --（如 "a--b"）。"""
+    out = []
+    quote = None
+    escape = False
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            out.append(ch)
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == quote:
+                quote = None
+        else:
+            if ch in "\"'":
+                quote = ch
+                out.append(ch)
+            elif ch == "-" and i + 1 < len(line) and line[i + 1] == "-":
+                break
+            else:
+                out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def script_literal_allowed(line, literal):
+    """这一行的这个字面串是否允许改写/送翻。"""
+    code = strip_script_comment(line)
+    if not code.strip():
+        return False
+    if _SCRIPT_LOG_CALL_RE.search(code):
+        return False
+    if _SCRIPT_LOGIC_CALL_RE.search(code):
+        return False
+    # 比较/连接判断里的字符串通常是标签、档位、状态名，不能换。
+    if re.search(r"==|~=|<=|>=", code):
+        return False
+    if _SCRIPT_UI_CALL_RE.search(code):
+        return True
+    m = _SCRIPT_ASSIGN_RE.match(code)
+    if m and _SCRIPT_TEXT_VAR_RE.search(m.group(1)):
+        return True
+    return False
+
+
+def script_literal_allowed_in_file(whole, cand):
+    """候选串在脚本里的**每一次**出现都必须是安全上下文，才允许改写。
+
+    任何一次出现在 log/string_find/比较里就整条跳过；全局替换无法区分
+    同一字面串的不同出现位置，保守跳过比改坏逻辑好。
+    """
+    if len(cand) < 2 or cand[0] not in "\"'" or cand[-1] != cand[0]:
+        return False
+    inner = cand[1:-1]
+    if not inner.strip():
+        return False
+    for needle in (cand, inner):
+        found = False
+        start = 0
+        while True:
+            idx = whole.find(needle, start)
+            if idx < 0:
+                break
+            found = True
+            line_start = whole.rfind("\n", 0, idx) + 1
+            line_end = whole.find("\n", idx)
+            if line_end < 0:
+                line_end = len(whole)
+            if not script_literal_allowed(whole[line_start:line_end], inner):
+                return False
+            start = idx + len(needle)
+        if found:
+            return True
+    return False
 
 
 def split_protected(text, max_chars, pattern):
@@ -2641,27 +3092,86 @@ class GlossaryIndex(object):
     扫描只要 1.22 ms（慢 36 倍）；两万条量级的任务上就是几十分钟纯 CPU
     空转，GPU 全程在等。分桶后每个字符只与"以该字符开头"的词条比较，
     比较次数降两个数量级，匹配语义与原正则逐字符一致（有等价性属性测试）。
+
+    v2 增补：
+    * `variants`：拼写变体映射到规范词条，避免 ё/е 两个译名打架；
+    * `case_sensitive`：人物名/技术缩写/小写单单词拉丁硬词要求首字母
+      大小写一致（大写专名仍命中，句子里的普通名词不再误伤）；
+    * 查找时统一做 ё→е 折叠，俄文里漏写两点的名字也能命中规范词条。
     """
 
-    def __init__(self, mapping):
-        self._map = {k: v for k, v in (mapping or {}).items() if k}
+    def __init__(self, mapping, case_sensitive=None, variants=None):
+        raw = {}
+        for k, v in (mapping or {}).items():
+            name = str(k)
+            if name.strip():
+                raw[name] = str(v)
+        self._case_sensitive = {str(k) for k in (case_sensitive or ())}
+        var = {str(k): str(v) for k, v in (variants or {}).items()
+               if str(k).strip() and str(v).strip()}
+
+        # 变体只做别名，不单独成为规范条目：否则硬词过滤会拿到变体键，
+        # 把“当前 MOD 专名”误判成软词。
+        self._map = {}
+        # 规范词条自身的译文优先；变体只在规范词条缺席时补位。
+        for key, value in raw.items():
+            if key not in var or var[key] == key:
+                self._map[key] = value
+        for key, value in raw.items():
+            canon = var.get(key, key)
+            if canon in raw:
+                self._map.setdefault(canon, value)
+            else:
+                self._map.setdefault(key, value)
+        self._alias = {}
+        for key in raw:
+            canon = var.get(key, key)
+            if canon not in self._map:
+                canon = key
+            self._alias.setdefault(self._fold(key), set()).add(canon)
+
         self._by2 = {}
         self._by1 = {}
         for key in self._map:
-            kl = key.lower()
+            kl = self._fold(key)
             if len(key) == 1:
                 t = self._by1.setdefault(kl, self._new_table())
             else:
                 t = self._by2.setdefault(kl[:2], self._new_table())
             L = len(key)
             t["e"].setdefault(L, set()).add(key)
-            t["c"].setdefault(L, {}).setdefault(kl, []).append(key)
+            for alias in self._alias.get(kl, (key,)):
+                if len(alias) != L:
+                    continue
+                t["c"].setdefault(L, {}).setdefault(
+                    self._fold(alias), []).append(key)
         for t in list(self._by1.values()) + list(self._by2.values()):
             t["lens"] = sorted(t["e"].keys(), reverse=True)
 
     @staticmethod
     def _new_table():
         return {"e": {}, "c": {}, "lens": []}
+
+    @staticmethod
+    def _fold(s):
+        return s.casefold().replace("ё", "е")
+
+    def _case_ok(self, seg, key):
+        """大小写敏感词条：全大写缩写必须逐字一致，其余只要求首字母一致。
+
+        首字母一致而不是全等，是为了让 `Гришачев`/`Гришачёв`、
+        `Санёк`/`Санек` 这类拼写变体仍能命中；`crystal` 与 `Crystal`
+        的首字母不同，正好被挡在正文普通名词之外。
+        """
+        if key not in self._case_sensitive:
+            return True
+        if key.isupper():
+            return seg == key
+        if key[:1].islower():
+            # 小写单单词 canon（bar/crystal/star）只认大写专名：
+            # 正文里的普通名词保持原样，交给模型按语境处理。
+            return bool(seg) and seg[:1].isupper()
+        return bool(seg) and bool(key) and seg[0] == key[0]
 
     def __len__(self):
         return len(self._map)
@@ -2681,12 +3191,18 @@ class GlossaryIndex(object):
             if pool and seg in pool:
                 key = seg
             else:
-                segl = seg.lower() if low is None else low[i:end]
+                segl = low[i:end] if low is not None else self._fold(seg)
                 cand = table["c"].get(L, {}).get(segl)
                 if cand:
+                    cand = list(dict.fromkeys(cand))
+                    exact = [k for k in cand if k[:1] == seg[:1]]
+                    if exact:
+                        cand = exact
                     key = max(cand, key=lambda k: sum(
                         1 for a, b in zip(seg, k) if a == b))
             if key is None:
+                continue
+            if not self._case_ok(seg, key):
                 continue
             if i and _is_word_char(text[i - 1]):
                 continue
@@ -2701,11 +3217,15 @@ class GlossaryIndex(object):
         if not text or not self._map:
             return out
         n = len(text)
-        _low = text.lower()
-        low = _low if len(_low) == n else None
+        low = self._fold(text)
+        if len(low) != n:
+            # 极少数字符 casefold 后长度变化（如 ß→ss）：退回逐段折叠，
+            # 保证位置与原文一一对应。
+            low = None
         i = 0
         while i < n:
-            p2 = low[i:i + 2] if low is not None else text[i:i + 2].lower()
+            p2 = low[i:i + 2] if low is not None else self._fold(
+                text[i:i + 2])
             key = self._probe(self._by2.get(p2), text, i, low)
             if key is None and self._by1:
                 key = self._probe(self._by1.get(p2[:1]), text, i, low)
@@ -2743,7 +3263,8 @@ class TranslationJob(object):
                  reference_mode=False, copy_reference=True,
                  only_referenced=False, protect_proper=True,
                  preview_reference=False, hard_glossary_keys=None,
-                 translate_literals=False):
+                 translate_literals=False, auto_session_terms=False,
+                 session_cache_dir=None, tm_lite=True):
         self.p = parser
         self.srv = server
         self.in_dir = in_dir
@@ -2751,7 +3272,14 @@ class TranslationJob(object):
         self.src_lang = src_lang
         self.tgt = tgt_lang
         self.reuse_dir = reuse_dir
-        self.glossary = glossary or {}
+        self.glossary = dict(glossary or {})
+        term_layers = load_term_layers()
+        self.gloss_names = set(term_layers["names"])
+        self.gloss_variants = dict(term_layers["variants"])
+        self.gloss_case_sensitive = set(term_layers["case_sensitive"])
+        # 技术精确表只做整条命中；不进入硬词/提示层。
+        for _k, _v in load_technical_exact().items():
+            self.glossary.setdefault(_k, _v)
         self.output_anyway = output_anyway
         self.force_glossary = force_glossary
         self.ctx_size = int(ctx_size)
@@ -2784,12 +3312,25 @@ class TranslationJob(object):
         self._temp_clock = 0
         self.out_dir = out_dir or os.path.join(in_dir, "translated_hy_mt2")
         self._excluded_paths = set()
-        self.gloss = GlossaryIndex(self.glossary) if self.glossary else None
+        self.gloss = self._new_gloss_index()
         # None = 兼容旧 API/测试：所有术语都可用；set = 只在这些硬词上
-        # 强制/提示（UI 传入 termbase 的专名类 + 用户自定义层）。
+        # 强制/提示（UI 传入 termbase 的 canon 层 + 用户自定义层）。
         self.gloss_hard = (set(hard_glossary_keys)
                            if hard_glossary_keys is not None else None)
         self.translate_literals = bool(translate_literals)
+        self.auto_session_terms = bool(auto_session_terms)
+        self.session_cache_dir = session_cache_dir or os.path.join(
+            _DATA_ROOT, "session_terms")
+        self.session_keys = set()
+        self.session_stats = {}
+        self.session_requests = 0
+        # TM-lite：高重复批次内精确复用；缓存只在本次任务内存里。
+        self.tm_lite = bool(tm_lite)
+        self.tm_stats = {"scope": "off", "total": 0, "unique": 0,
+                         "ratio": 0.0, "hits": 0, "saved_chars": 0}
+        self._tm_cache = {}
+        self._tm_global_enabled = False
+        self._tm_local_enabled = False
         # 完成账本：记录"每个输入文件的指纹 + 输出大小"，取代"输出文件存在就算
         # 译完"。旧做法在两种真实场景下会静默漏译：①游戏更新给 XML 加了新条目，
         # ②ltx/cfg 上次中断留下半截输出 —— 两者都会被"存在即跳过"永久保留。
@@ -2886,14 +3427,32 @@ class TranslationJob(object):
         # 已经是译文，0.3 会把品牌名那点拉丁字母算成“不是中文”，又翻一遍。
         return han / len(letters) > 0.1
 
+    def _new_gloss_index(self):
+        if not self.glossary:
+            return None
+        return GlossaryIndex(
+            self.glossary, case_sensitive=self.gloss_case_sensitive,
+            variants=self.gloss_variants)
+
     def _glossary_hits(self, text):
-        """命中的硬术语 (原文, 译文)，用于提示块；普通词不注入。"""
+        """命中的硬术语 + 人物软提示，用于提示块；普通词不注入。
+
+        canon 层与本次 MOD 会话词在前，人物层只作末尾软提示（不强制替换）。
+        人物层按首字母大小写匹配，正文里的 доктор/bar 不会误命中专名。
+        """
         if self.gloss is None:
             return []
         pairs = self.gloss.hits(text)
         if self.gloss_hard is None:
             return pairs
-        return [(k, v) for k, v in pairs if k in self.gloss_hard]
+        hard = [(k, v) for k, v in pairs
+                if k in self.gloss_hard or k in self.session_keys]
+        if not self.gloss_names:
+            return hard
+        used = {k for k, _v in hard}
+        names = [(k, v) for k, v in pairs
+                 if k in self.gloss_names and k not in used]
+        return hard + names
 
     def _glossary_spans(self, text):
         """命中的硬术语 (start, end, key)，用于强制/切片。"""
@@ -2904,7 +3463,91 @@ class TranslationJob(object):
             return spans
         return [h for h in spans if h[2] in self.gloss_hard]
 
-    def _translate_chunk(self, content, lang, hints, depth=0):
+    # ── TM-lite：高重复批次内的精确复用 ────────────────────────────
+    @staticmethod
+    def _tm_norm(text):
+        """归一化只做空白/换行整理，保留大小写与标点——精确复用不猜语义。"""
+        s = unescape_newlines(str(text or "")).strip()
+        return re.sub(r"[ \t]+", " ", s)
+
+    def _tm_key(self, text, lang):
+        src = self._tm_norm(text)
+        sig = (tuple(sorted(_RUNTIME_TOKEN_RE.findall(src))),
+               src.count("\n"))
+        return (str(lang), len(src), sig, src)
+
+    def _tm_measure(self, values):
+        seen = set()
+        total = 0
+        for value in values:
+            src = self._tm_norm(value)
+            if len(src) < 4:
+                continue
+            total += 1
+            seen.add(src)
+        unique = len(seen)
+        return {"total": total, "unique": unique,
+                "ratio": (1.0 - float(unique) / total) if total else 0.0}
+
+    def _tm_should_enable(self, stats):
+        total = int(stats.get("total") or 0)
+        unique = int(stats.get("unique") or 0)
+        ratio = stats.get("ratio")
+        if ratio is None:
+            ratio = (1.0 - float(unique) / total) if total else 0.0
+        return (self.tm_lite and total >= TM_LITE_MIN_ENTRIES
+                and ratio >= TM_LITE_MIN_RATIO)
+
+    def _tm_enable_global(self, values):
+        """任务级门控：重复率高才跨表复用；否则完全走原路径。"""
+        if not self.tm_lite:
+            return False
+        stats = self._tm_measure(values)
+        self.tm_stats.update(stats)
+        if self._tm_should_enable(stats):
+            self._tm_global_enabled = True
+            self.tm_stats["scope"] = "global"
+            self.log("TM-lite：本批重复率 %.1f%%（%d/%d），启用跨表精确复用"
+                     % (stats["ratio"] * 100, stats["unique"],
+                        stats["total"]), "dim")
+            return True
+        self.log("TM-lite：未启用（重复率 %.1f%%，门槛 %.0f%%；"
+                 "不改变翻译路径）"
+                 % (stats["ratio"] * 100, TM_LITE_MIN_RATIO * 100), "dim")
+        return False
+
+    def _tm_enable_table(self, values, rel):
+        """表级门控：任务级没启用时，只在高重复表内复用。"""
+        self._tm_local_enabled = False
+        if not self.tm_lite or self._tm_global_enabled:
+            return
+        stats = self._tm_measure(values)
+        if not self._tm_should_enable(stats):
+            return
+        self._tm_local_enabled = True
+        self._tm_cache = {}
+        self.tm_stats.update(stats)
+        self.tm_stats["scope"] = "table"
+        self.log("TM-lite：%s 重复率 %.1f%%（%d/%d），表内精确复用"
+                 % (rel, stats["ratio"] * 100, stats["unique"],
+                    stats["total"]), "dim")
+
+    def _tm_lookup(self, text, lang):
+        if not (self._tm_global_enabled or self._tm_local_enabled):
+            return None
+        return self._tm_cache.get(self._tm_key(text, lang))
+
+    def _tm_store(self, text, lang, out):
+        if not (self._tm_global_enabled or self._tm_local_enabled):
+            return
+        src = self._tm_norm(text)
+        if len(src) < 4 or not out or out == text:
+            return
+        if self.tgt == "chs" and not has_cjk(out):
+            return
+        self._tm_cache.setdefault(self._tm_key(text, lang), out)
+
+    def _translate_chunk(self, content, lang, hints, depth=0, note=""):
         """翻译单个句段：超出该档安全长度时按句切分逐段翻译并拼回，
         保证不超长、不截断（长文质量保护）。
 
@@ -2914,7 +3557,8 @@ class TranslationJob(object):
         if len(content) <= self.safe_chars:
             try:
                 return self.srv.translate(
-                    content, lang, self.tgt, glossary_hits=hints)
+                    content, lang, self.tgt, glossary_hits=hints,
+                    extra_sys=note or None)
             except OutputTruncated:
                 if depth >= 3 or len(content) < 8:
                     self.log("  输出被截断且已无法再切分（%d 字符），"
@@ -2923,41 +3567,37 @@ class TranslationJob(object):
                 self.log("  输出被截断，按句再切一次重译（%d 字符）"
                          % len(content), "warn")
                 return "".join(
-                    self._translate_chunk(seg, lang, hints, depth + 1)
+                    self._translate_chunk(seg, lang, hints, depth + 1, note)
                     for seg in split_long_text(
                         content, max(4, len(content) // 2)))
-        parts = split_long_text(content, self.safe_chars)
+        parts = split_protected(content, self.safe_chars, _ANY_PLACEHOLDER_RE)
         if len(parts) > 1:
             self.long_chunks += max(0, len(parts) - 1)
             self.log("  长文本 %d 字符 → 自动切为 %d 段翻译（%s 上下文窗）"
                      % (len(content), len(parts), self.ctx_size))
         return "".join(
-            self._translate_chunk(seg, lang, hints, depth + 1)
+            self._translate_chunk(seg, lang, hints, depth + 1, note)
             for seg in parts)
 
-    def _translate_segments(self, text, lang):
-        """切占位符后逐段翻译；非强制模式把术语作为提示注入，且整条精确命中直接替换。"""
-        pieces = self.p.cutTextWithSeparator(text)
-        for piece in pieces:
-            if not piece["needTrans"]:
-                piece["translated"] = piece["content"]
-                continue
-            if lang == self.tgt:
-                piece["translated"] = piece["content"]
-                continue
-            stripped = piece["content"].strip()
-            if not self.force_glossary and stripped in self.glossary:
-                piece["translated"] = piece["content"].replace(
-                    stripped, self.glossary[stripped])
-                self.req_count += 1
-                continue
+    def _translate_segments(self, text, lang, note=""):
+        """整条翻译；占位符在 `_translate_one` 里已 mask，不能在这里按
+        换行/`$$ACTION$$` 再切碎。
+
+        旧实现调用 `cutTextWithSeparator`：它把 `\\n` 当分隔符，多行描述被
+        拆成一段段单独翻译，实测 8 条藏匿点描述发了 56 次请求，行与行之间
+        失去上下文。这里只保留“整条精确命中术语”的快捷路径，其余交给
+        `_translate_chunk`（超长时仍按句切分，保留占位符）。
+        """
+        if not text.strip():
+            return text
+        stripped = text.strip()
+        if not self.force_glossary and stripped in self.glossary:
             self.req_count += 1
-            self.trans_chars += len(piece["content"])
-            hints = None if self.force_glossary else self._glossary_hits(
-                piece["content"])
-            piece["translated"] = self._translate_chunk(
-                piece["content"], lang, hints)
-        return "".join(pc["translated"] for pc in pieces)
+            return text.replace(stripped, self.glossary[stripped])
+        self.req_count += 1
+        self.trans_chars += len(text)
+        hints = None if self.force_glossary else self._glossary_hits(text)
+        return self._translate_chunk(text, lang, hints, note=note)
 
     def _translate_one(self, text, lang):
         """翻译一个文本串；运行期占位符先 mask，译后校验并回填。
@@ -2965,30 +3605,132 @@ class TranslationJob(object):
         校验失败（模型改了/丢了 `$name`、`%s`、`\n` 等）时**保留原文**，
         绝不把坏译文写进文本表。这是硬约束，不依赖提示词。
         """
+        if lang in ("auto", "text"):
+            lang = detect_text_lang(text) or self._lang_hint or "rus"
+        elif lang in ("rus", "eng"):
+            det = detect_text_lang(text)
+            if det and det != lang:
+                lang = det
         if lang == self.tgt:
             return text
-        masked, mapping = mask_runtime_tokens(text)
+        hit = self._tm_lookup(text, lang)
+        if hit is not None:
+            self.tm_stats["hits"] += 1
+            self.tm_stats["saved_chars"] += len(text)
+            self.detail("  TM-lite 精确复用：%s" % str(text)[:60])
+            return hit
+        normalized = unescape_newlines(text)
+        masked, mapping = mask_runtime_tokens(normalized)
         if not mapping:
-            return self._translate_plain(text, lang)
-        out = self._translate_plain(masked, lang)
-        restored = restore_runtime_tokens(out, mapping)
-        if restored is None:
-            self.detail("  运行占位符未原样保留，保留原文：%s"
-                        % str(text)[:60])
+            out = self._translate_plain(normalized, lang)
+        else:
+            out = self._translate_plain(masked, lang)
+            restored = restore_runtime_tokens(out, mapping)
+            if restored is None:
+                # 颜色控制符（%c[...]）在带术语提示的请求里偶发被模型
+                # 吞掉；先按“逐字保留控制符”重试一次，仍失败才保留原文。
+                try:
+                    retry_raw = self._translate_plain(
+                        masked, lang, note=_PLACEHOLDER_RETRY_NOTE)
+                    retry = restore_runtime_tokens(retry_raw, mapping)
+                except Exception:
+                    retry = None
+                if retry is None:
+                    self.detail("  运行占位符未原样保留，保留原文：%s"
+                                % str(text)[:60])
+                    return text
+                self.detail("  控制符未保留，已按逐字保留要求重试：%s"
+                            % str(text)[:50])
+                out = retry
+            else:
+                out = restored
+        if looks_like_prompt_echo(out):
+            self.detail("  模型回显提示词，保留原文：%s" % str(text)[:60])
             return text
-        return restored
+        # 多行保真：模型偶尔把整段合并成一行；带明确数量再试一次。
+        source_nl = normalized.count("\n")
+        if source_nl and out.count("\n") != source_nl:
+            note = ("原文有 %d 个换行，必须输出 %d 个换行，逐行对应；"
+                    "不得合并段落，也不得多加空行。" % (source_nl, source_nl))
+            try:
+                if mapping:
+                    retry_raw = self._translate_plain(
+                        masked, lang, note=note)
+                    retry = restore_runtime_tokens(retry_raw, mapping)
+                else:
+                    retry = self._translate_plain(
+                        normalized, lang, note=note)
+            except Exception:
+                retry = None
+            if retry and not looks_like_prompt_echo(retry) \
+                    and retry.count("\n") == source_nl:
+                self.detail("  换行数不符，已按原文段数重试：%s"
+                            % str(text)[:50])
+                out = retry
+            else:
+                fixed = restore_linebreaks(out, source_nl)
+                if fixed != out:
+                    self.detail("  换行数不符（%d→%d），按句末标点补回"
+                                % (source_nl, out.count("\n")))
+                    out = fixed
+                else:
+                    self.detail("  换行数与原文不一致（%d→%d），保留首次译文"
+                                % (source_nl, out.count("\n")))
+        # 粗口保真闸门：原文有脏话/辱骂/威胁，译文却完全软化时，带
+        # “保留同等力度”的补充要求重试一次；仍软化则保留第一次结果。
+        if has_source_profanity(normalized) and not has_zh_profanity(out):
+            try:
+                if mapping:
+                    retry_raw = self._translate_plain(
+                        masked, lang, note=_PROFANITY_RETRY_NOTE)
+                    retry = restore_runtime_tokens(retry_raw, mapping)
+                else:
+                    retry = self._translate_plain(
+                        normalized, lang, note=_PROFANITY_RETRY_NOTE)
+            except Exception:
+                retry = None
+            if retry and not looks_like_prompt_echo(retry) \
+                    and has_zh_profanity(retry):
+                self.detail("  粗口被软化，已按原文力度重试：%s"
+                            % str(text)[:50])
+                out = retry
+        # 完整性闸门：源文有可译内容，模型却原样回显/输出英文时重试一次。
+        # 不处理纯型号（FX / ППШ-41）和无空格缩写，避免无意义请求。
+        if (not has_cjk(out) and not has_cjk(text)
+                and (re.search(r"[a-zа-яё]{2,}", text)
+                     or " " in text.strip())):
+            note = ("必须译成简体中文，不要保留英文或俄文原文；"
+                    "人名音译，物品/任务按上下文意译。")
+            try:
+                if mapping:
+                    retry_raw = self._translate_plain(
+                        masked, lang, note=note)
+                    retry = restore_runtime_tokens(retry_raw, mapping)
+                else:
+                    retry = self._translate_plain(
+                        normalized, lang, note=note)
+            except Exception:
+                retry = None
+            if retry and not looks_like_prompt_echo(retry) \
+                    and has_cjk(retry):
+                self.detail("  译文无中文，已按完整性要求重试：%s"
+                            % str(text)[:50])
+                out = retry
+        final = escape_newlines(out)
+        self._tm_store(normalized, lang, final)
+        return final
 
-    def _translate_plain(self, text, lang):
+    def _translate_plain(self, text, lang, note=""):
         """翻译一个文本串；强制术语模式下整体翻译后回填指定译名。"""
         if lang == self.tgt:
             return text
         if not self.glossary:
-            return self._translate_segments(text, lang)
+            return self._translate_segments(text, lang, note=note)
         if self.force_glossary and self.gloss is not None:
-            return self._translate_force(text, lang)
-        return self._translate_segments(text, lang)
+            return self._translate_force(text, lang, note=note)
+        return self._translate_segments(text, lang, note=note)
 
-    def _translate_sliced(self, text, lang):
+    def _translate_sliced(self, text, lang, note=""):
         """旧的强制术语做法：把术语之间的片段**各自**送翻，术语直接拼接。
 
         保留是为了兜底（占位符法校验不过时回退到这里）。实测这条路径在
@@ -3000,14 +3742,16 @@ class TranslationJob(object):
         last = 0
         for start, end, key in self._glossary_spans(text):
             if start > last:
-                out.append(self._translate_segments(text[last:start], lang))
+                out.append(self._translate_segments(
+                    text[last:start], lang, note=note))
             out.append(self.glossary[key])
             last = end
         if last < len(text):
-            out.append(self._translate_segments(text[last:], lang))
+            out.append(self._translate_segments(
+                text[last:], lang, note=note))
         return "".join(out) if out else text
 
-    def _translate_force(self, text, lang):
+    def _translate_force(self, text, lang, note=""):
         """强制术语：先把术语换成占位符，**整串一次翻译**，再把占位符回填成
         词库指定译名。
 
@@ -3038,38 +3782,40 @@ class TranslationJob(object):
                 if not pc["needTrans"] and pc["content"].strip()]
 
         try:
-            out = self._translate_masked(masked, lang)
+            out = self._translate_masked(masked, lang, note=note)
         except Exception as e:
             self.detail("  占位符整译失败（%s: %s），回退到切片方式"
                         % (type(e).__name__, e))
-            return self._translate_sliced(text, lang)
+            return self._translate_sliced(text, lang, note=note)
 
         bad = [ph for ph in mapping if out.count(ph) != 1]
         if bad:
             self.detail("  占位符未原样保留（%s），回退到切片方式"
                         % "、".join(bad[:3]))
-            return self._translate_sliced(text, lang)
+            return self._translate_sliced(text, lang, note=note)
         lost = [h for h in hard if h not in out]
         if lost:
             self.detail("  控制符被改动（%s），回退到切片方式"
                         % "、".join(repr(h) for h in lost[:3]))
-            return self._translate_sliced(text, lang)
+            return self._translate_sliced(text, lang, note=note)
 
         for ph, val in mapping.items():
             out = out.replace(ph, val)
         return out
 
-    def _translate_masked(self, masked, lang):
+    def _translate_masked(self, masked, lang, note=""):
         """把已占位符化的整串交给模型翻一次（超长时按句切分，不丢占位符）。"""
         self.req_count += 1
         self.trans_chars += len(masked)
         if len(masked) <= self.safe_chars:
-            return self.srv.translate(masked, lang, self.tgt)
+            return self.srv.translate(masked, lang, self.tgt,
+                                      extra_sys=note or None)
         parts = split_protected(masked, self.safe_chars, _PLACEHOLDER_RE)
         self.long_chunks += max(0, len(parts) - 1)
         self.log("  长文本 %d 字符 → 自动切为 %d 段翻译（%s 上下文窗）"
                  % (len(masked), len(parts), self.ctx_size))
-        return "".join(self._translate_masked(seg, lang) for seg in parts)
+        return "".join(self._translate_masked(seg, lang, note)
+                       for seg in parts)
 
 
     def _fallback_done_dir(self):
@@ -3091,6 +3837,178 @@ class TranslationJob(object):
         self.log("输出目录不可写（%s），译文改存到：%s"
                  % (preferred, fb), "warn")
         return fb
+
+    def _session_tables(self):
+        """当前 MOD 的文本表（兼容 configs/text 与 config/text 两种布局）。"""
+        for root, _dirs, files in self._pruned_walk():
+            for fn in files:
+                if not fn.lower().endswith(".xml"):
+                    continue
+                rel = os.path.relpath(os.path.join(root, fn), self.in_dir)
+                low = rel.lower().replace(os.sep, "/")
+                if not (low.startswith("configs/text/")
+                        or low.startswith("config/text/")):
+                    continue
+                if "sgtat_auto_texts" in low or "/___" in low:
+                    continue
+                yield rel, os.path.join(root, fn)
+
+    def _session_candidates(self):
+        """抽取名字型候选；返回 {lower: (source, category, lang, rel, id)}。"""
+        core = {k.lower() for k in self.glossary}
+        stop = set(GLOSSARY_HINT_STOPWORDS) | {
+            "нет", "да", "все", "всё", "это", "так", "там", "тут", "очень",
+            "можно", "нужно", "надо", "есть", "был", "была", "были",
+        }
+        cand = {}
+        self._session_core_hits = set()
+        for rel, full in self._session_tables():
+            if self._cancelled():
+                return cand
+            try:
+                ents = self._parse(self.p.parse_xray_text_xml, full,
+                                   read_encoding_chain(full))
+            except Exception:
+                continue
+            for ent in ents:
+                cat = session_category(rel, ent.id)
+                if not cat:
+                    continue
+                lang, src = self._pick_source(ent)
+                if not src or has_cjk(src):
+                    continue
+                bare = session_term_shape(src, cat)
+                if not bare:
+                    continue
+                low = bare.lower()
+                if low in core:
+                    # 核心词已在通用库；只把它登记为“本次 MOD 见过”，
+                    # 让对话里也能作为软提示，不重新翻译、不硬替换。
+                    self._session_core_hits.add(bare)
+                    continue
+                if (low in stop
+                        or looks_like_code_or_debug(rel, bare)
+                        or looks_like_identifier_text(bare)):
+                    continue
+                if low not in cand:
+                    cand[low] = (bare, cat,
+                                 detect_text_lang(bare) or lang or "rus",
+                                 rel, ent.id)
+        order = {"人物与军衔": 0, "阵营与组织": 1, "地点与区域": 2,
+                 "变异生物": 3, "物品·武器·装备·神器": 4}
+        rows = sorted(cand.values(),
+                      key=lambda x: (order.get(x[1], 9), len(x[0]), x[0]))
+        kept = {}
+        used = {k: 0 for k in _SESSION_LIMITS}
+        for src, cat, lang, rel, eid in rows:
+            if used.get(cat, 0) >= _SESSION_LIMITS.get(cat, 0):
+                continue
+            used[cat] += 1
+            kept[src.lower()] = (src, cat, lang, rel, eid)
+        return kept
+
+    @staticmethod
+    def _clean_term_line(line):
+        s = (line or "").strip()
+        s = re.sub(r"^\s*(?:[-*•]|\d+[.)、])\s*", "", s)
+        return s.strip().strip("\"'“”‘’` ").strip()
+
+    def _translate_session_batch(self, terms, lang):
+        """批量翻译名词；行数不符时返回空，交回单条重试。"""
+        self.session_requests += 1
+        try:
+            out = self.srv.translate(
+                "\n".join(terms), lang, self.tgt,
+                extra_sys=_SESSION_TERM_NOTE)
+        except Exception:
+            return {}
+        lines = [self._clean_term_line(x) for x in (out or "").splitlines()
+                 if x.strip()]
+        if len(lines) != len(terms):
+            return {}
+        result = {}
+        for src, dst in zip(terms, lines):
+            if (dst and dst != src and has_cjk(dst)
+                    and not looks_like_prompt_echo(dst) and len(dst) <= 60):
+                result[src] = dst
+        return result
+
+    def _build_session_glossary(self):
+        """扫描当前 MOD，补齐名字型术语；缓存只在本机，不随包。"""
+        if not self.srv or not self.srv.is_running():
+            return
+        cand = self._session_candidates()
+        if not cand:
+            self.session_keys = set(getattr(self, "_session_core_hits", set()))
+            self.session_stats = {"candidates": 0, "cached": 0,
+                                  "translated": 0, "failed": 0}
+            return
+        raw = "\n".join("%s|%s|%s" % (v[3], v[4], v[0])
+                        for v in sorted(cand.values()))
+        fp = hashlib.sha1(raw.encode("utf-8", "replace")).hexdigest()
+        cache_path = os.path.join(self.session_cache_dir, fp + ".json")
+        cached = {}
+        try:
+            data = json.load(open(cache_path, encoding="utf-8"))
+            if isinstance(data.get("terms"), dict):
+                cached = {str(k): str(v) for k, v in data["terms"].items()}
+        except Exception:
+            cached = {}
+        cache_low = {k.lower(): v for k, v in cached.items()}
+        translated = {}
+        missing = [(v[0], v[2]) for low, v in cand.items()
+                   if low not in cache_low]
+        by_lang = {}
+        for src, lang in missing:
+            by_lang.setdefault(lang, []).append(src)
+        for lang, items in by_lang.items():
+            for i in range(0, len(items), 20):
+                batch = items[i:i + 20]
+                got = self._translate_session_batch(batch, lang)
+                translated.update(got)
+                for src in batch:
+                    if src in got:
+                        continue
+                    self.session_requests += 1
+                    try:
+                        out = self.srv.translate(
+                            src, lang, self.tgt,
+                            extra_sys=_SESSION_TERM_NOTE)
+                    except Exception:
+                        continue
+                    dst = self._clean_term_line(out)
+                    if (dst and dst != src and has_cjk(dst)
+                            and not looks_like_prompt_echo(dst)
+                            and len(dst) <= 60):
+                        translated[src] = dst
+        merged = dict(cached)
+        merged.update(translated)
+        self.session_keys = set(merged) | set(
+            getattr(self, "_session_core_hits", set()))
+        for src, dst in merged.items():
+            self.glossary[src] = dst
+        self.gloss = self._new_gloss_index()
+        try:
+            os.makedirs(self.session_cache_dir, exist_ok=True)
+            tmp = cache_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"_format": "ai-translate-session-terms/1",
+                           "fingerprint": fp, "terms": merged},
+                          f, ensure_ascii=False, indent=1, sort_keys=True)
+            os.replace(tmp, cache_path)
+        except OSError:
+            pass
+        self.session_stats = {
+            "candidates": len(cand),
+            "cached": len(cache_low),
+            "translated": len(translated),
+            "failed": max(0, len(missing) - len(translated)),
+        }
+        self.log("会话词表：候选 %d 条，缓存 %d，新译 %d，失败 %d（本机缓存，不随包）"
+                 % (self.session_stats["candidates"],
+                    self.session_stats["cached"],
+                    self.session_stats["translated"],
+                    self.session_stats["failed"]), "dim")
 
     def _is_stale_empty_output(self, out_path):
         """旧版缺陷会给不含文本条目的文件生成空 XML 占位，
@@ -3206,6 +4124,14 @@ class TranslationJob(object):
         self._ledger_present = os.path.isfile(self._ledger_path)
         self._ledger = self._load_ledger()
 
+        if self.auto_session_terms and not self.preview_reference:
+            try:
+                self._build_session_glossary()
+                self.req_count += self.session_requests
+            except Exception as e:
+                self.log("会话词表生成失败，继续使用通用术语库：%s：%s"
+                         % (type(e).__name__, e), "warn")
+
         reuse = {}
         if (self.reuse_dir and os.path.isdir(self.reuse_dir)
                 and not self.reference_mode):
@@ -3277,6 +4203,12 @@ class TranslationJob(object):
                  (self.req_count, _fmt_size(self.trans_chars),
                   ("，超长文本自动分句 %d 次" % self.long_chunks)
                   if self.long_chunks else ""))
+        if self.tm_stats.get("scope") != "off" or self.tm_stats.get("hits"):
+            self.log("TM-lite：%s，精确复用 %d 条，节省 %s 字符"
+                     % ("跨表" if self.tm_stats.get("scope") == "global"
+                        else "表内", self.tm_stats.get("hits", 0),
+                        _fmt_size(self.tm_stats.get("saved_chars", 0))),
+                     "dim")
         if self.empty_files:
             self.log("有 %d 个文件未提取到可译文本（前 20 个见详细日志）"
                      % self.empty_files)
@@ -3474,6 +4406,7 @@ class TranslationJob(object):
 
     def _reference_candidates(self):
         total = todo = protected = 0
+        tm_values = []
         for full, table in self._table_entries.items():
             rel = os.path.relpath(full, self.in_dir)
             for ent in table.values():
@@ -3487,12 +4420,14 @@ class TranslationJob(object):
                 if looks_like_code_or_debug(rel, src):
                     continue
                 total += 1
+                tm_values.append(src)
                 if self.only_referenced and ent.id not in self._ref_counts:
                     continue
                 if self.protect_proper and looks_like_proper_text(rel, src):
                     protected += 1
                     continue
                 todo += 1
+        self._tm_enable_global(tm_values)
         return total, todo, protected
 
     def _run_reference_layer(self, done_dir, reuse):
@@ -3666,6 +4601,18 @@ class TranslationJob(object):
             st["copied"] = True
             self._record_done(rel, full, out_path)
             return st
+        if self.tm_lite and not self._tm_global_enabled:
+            tm_values = []
+            for ent in ents:
+                _lang, src = self._pick_source(ent)
+                if not src or not src.strip():
+                    continue
+                if self._looks_like_target(src) or not _has_translatable_text(src):
+                    continue
+                if looks_like_code_or_debug(rel, src):
+                    continue
+                tm_values.append(src)
+            self._tm_enable_table(tm_values, rel)
         changes = {}
         for ent in ents:
             if self._cancelled():
@@ -3674,6 +4621,15 @@ class TranslationJob(object):
             if not src or not src.strip():
                 continue
             if self._looks_like_target(src):
+                continue
+            exact = src.strip()
+            if exact in self.glossary:
+                lead = src[:len(src) - len(src.lstrip())]
+                trail = src[len(src.rstrip()):]
+                new_exact = lead + self.glossary[exact] + trail
+                if new_exact != src:
+                    changes[ent.id] = (lang, new_exact)
+                    st["translated"] += 1
                 continue
             if not _has_translatable_text(src):
                 continue
@@ -3686,6 +4642,13 @@ class TranslationJob(object):
                 st["skipped"] += 1
                 continue
             use_lang = self.src_lang if self.src_lang != "auto" else lang
+            # 字段名不可靠：不少 MOD 把英语放进 <rus>，或把俄语放进 <text>。
+            # 即使显式选了 rus/eng，正文明显是另一种语言时也按正文判断；
+            # ukr 不覆盖（俄/乌都是西里尔，粗判分不出来）。
+            if use_lang in ("auto", "text", "rus", "eng"):
+                det = detect_text_lang(src)
+                if det and det != use_lang:
+                    use_lang = det
             try:
                 out = self._translate_one(src, use_lang)
             except Exception as e:
@@ -4084,6 +5047,12 @@ class TranslationJob(object):
                 done[ent.id] = src
             elif src:
                 use_lang = self.src_lang if self.src_lang != "auto" else lang
+                # 字段名不可靠：不少 MOD 把英语放进 <rus>，或把俄语放进 <text>。
+                # 自动模式下按本条正文的字母构成覆盖字段判断。
+                if use_lang in ("auto", "text", "rus", "eng"):
+                    det = detect_text_lang(src)
+                    if det and det != use_lang:
+                        use_lang = det
                 try:
                     done[ent.id] = self._translate_one(src, use_lang)
                 except Exception as e:
@@ -4241,6 +5210,11 @@ class TranslationJob(object):
             if self.empty_files <= 20:
                 self.detail("  %s 未提取到可译文本（%s 模式的提取规则见上游）"
                             % (os.path.basename(full), self.mode))
+        if self.mode in ("scriptE", "scriptL"):
+            # 上游提取器不认识上下文；这里只保留显示类调用/文本变量赋值，
+            # 跳过 log、string_find/string_gsub、比较运算。见 script_literal_allowed。
+            cands = [c for c in cands
+                     if script_literal_allowed_in_file(whole, c)]
         if self._cancelled():
             return None
         rep = {}
@@ -4276,7 +5250,11 @@ class TranslationJob(object):
             if self._cancelled():
                 return None
             try:
-                transed = self._translate_one(send, self.src_lang)
+                lang = self.src_lang
+                if lang in ("auto", "text"):
+                    lang = (detect_text_lang(send) or self._lang_hint
+                            or "rus")
+                transed = self._translate_one(send, lang)
             except Exception as e:
                 self.failed_strings += 1
                 self.detail("  条目翻译失败，保留原文：%s（%s: %s）"
@@ -4288,14 +5266,20 @@ class TranslationJob(object):
                 key = prefix + str(gen[0])
                 gen[0] += 1
                 extract[key] = transed
-                rep[cand] = key
+                if self.mode == "scriptE":
+                    # 脚本里裸 ID 是未定义全局变量（nil）；补丁统一用
+                    # game.translate_string("id")。这里必须包起来。
+                    rep[cand] = 'game.translate_string("%s")' % key
+                else:
+                    rep[cand] = key
             else:
                 if "chars_all_in" not in extract:
                     extract["chars_all_in"] = set()
                 for ch in transed:
                     extract["chars_all_in"].add(ch)
+                inline = unescape_newlines(transed)
                 rep[qch + self.p.escapeLiteralText(send, quote=qch) + qch] = (
-                    qch + self.p.escapeLiteralText(transed, quote=qch) + qch)
+                    qch + self.p.escapeLiteralText(inline, quote=qch) + qch)
         if not rep:
             return (whole, {}, enc)
         whole = self.p.replaceFromText(whole, rep)
@@ -4793,6 +5777,19 @@ class AiTranslateTab(object):
         ui.pack(self.literal_chk, side="left", padx=(6, 0))
         _chk_set(self.literal_chk, self.cfg.get("translate_literals", True))
 
+        r6 = self._reg(ui.row(p))
+        ui.pack(r6, fill="x", pady=(1, 0))
+        self.session_chk = self._reg(ui.checkbox(
+            r6, "自动生成当前MOD会话词表（名字/物品/地点，本机缓存）",
+            on_toggle=None))
+        ui.pack(self.session_chk, side="left")
+        _chk_set(self.session_chk, self.cfg.get("session_glossary", True))
+        self.tm_chk = self._reg(ui.checkbox(
+            r6, "重复句精确复用（TM-lite，高重复时自动）",
+            on_toggle=None))
+        ui.pack(self.tm_chk, side="left", padx=(10, 0))
+        _chk_set(self.tm_chk, self.cfg.get("tm_lite", True))
+
         ex1 = self._reg(ui.row(p))
         ui.pack(ex1, fill="x", pady=(3, 0))
         ui.pack(ui.label(ex1, "附加提示词/约束（可选，追加到内置规则后）："),
@@ -5032,7 +6029,9 @@ class AiTranslateTab(object):
                 ("only_referenced", self.only_ref_chk),
                 ("protect_proper_v2", self.protect_chk),
                 ("preview_reference", self.preview_chk),
-                ("translate_literals", self.literal_chk)):
+                ("translate_literals", self.literal_chk),
+                ("session_glossary", self.session_chk),
+                ("tm_lite", self.tm_chk)):
             try:
                 self.cfg[key] = _chk_get(widget)
             except Exception:
@@ -5816,6 +6815,8 @@ class AiTranslateTab(object):
         protect_proper = False
         preview_ref = False
         translate_literals = True
+        session_glossary = True
+        tm_lite = True
         try:
             ref_mode = bool(_chk_get(self.ref_chk))
             copy_ref = bool(_chk_get(self.copy_ref_chk))
@@ -5823,6 +6824,8 @@ class AiTranslateTab(object):
             protect_proper = bool(_chk_get(self.protect_chk))
             preview_ref = bool(_chk_get(self.preview_chk))
             translate_literals = bool(_chk_get(self.literal_chk))
+            session_glossary = bool(_chk_get(self.session_chk))
+            tm_lite = bool(_chk_get(self.tm_chk))
         except Exception:
             pass
 
@@ -5911,7 +6914,9 @@ class AiTranslateTab(object):
                     protect_proper=protect_proper,
                     preview_reference=preview_ref,
                     hard_glossary_keys=hard_glossary,
-                    translate_literals=translate_literals)
+                    translate_literals=translate_literals,
+                    auto_session_terms=session_glossary,
+                    tm_lite=tm_lite)
                 job.run()
             except Exception as e:
                 self.ui_call(self.log, "翻译失败：%s" % e, "err")

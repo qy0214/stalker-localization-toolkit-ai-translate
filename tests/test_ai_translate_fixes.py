@@ -328,7 +328,7 @@ class FakeServer(object):
         self.truncate_once = list(truncate_once)
 
     def translate(self, text, src, tgt, glossary_hits=None, timeout_sec=180,
-                  max_tokens=None):
+                  max_tokens=None, extra_sys=None):
         self.calls.append(text)
         for w in self.fail_words:
             if w in text:
@@ -466,7 +466,7 @@ def t6_truncation():
 
     class AlwaysTrunc(FakeServer):
         def translate(self, text, src, tgt, glossary_hits=None,
-                      timeout_sec=180, max_tokens=None):
+                      timeout_sec=180, max_tokens=None, extra_sys=None):
             raise ait.OutputTruncated("总是截断")
 
     job2 = make_job(TMP, server=AlwaysTrunc())
@@ -554,7 +554,7 @@ def t8_prompt():
     user = body["messages"][1]["content"]
     head = user.split("：")[0]
     check("T8-1 提示词使用语言全名而非语言码",
-          "Русский" in head and "下面的ru" not in head, head)
+          "俄语" in head and "下面的ru" not in head, head)
     check("T8-2 返回内容正确解析", out == "好")
 
     # 截断信号
@@ -750,6 +750,7 @@ def t13_vendor():
 def t14_prompt_extra():
     print("\n--- T14 附加提示词与脏话保真口径 ---")
     base = ait.TRANSLATION_SYS_PROMPT
+    base_en = ait.TRANSLATION_SYS_PROMPT_EN
 
     # 1) 内置规则必须明确要求脏话按原意直译（否则模型会自行"文明化"）
     need = ("粗话", "不得弱化", "不得因内容而回避")
@@ -807,13 +808,21 @@ def t14_prompt_extra():
     finally:
         ait.urllib.request.urlopen = orig_urlopen
 
-    check("T14-4 附加提示词为空时，system 消息与基准提示词逐字相同",
-          sys_empty == base, repr(sys_empty[-40:]))
-    want = base + "\n补充要求（优先遵守）：\n· 语气：冷峻简短的军事简报口吻。"
+    check("T14-4 附加提示词为空时，system 消息与英语基准提示词逐字相同",
+          sys_empty == base_en, repr(sys_empty[-40:]))
+    want = base_en + "\n补充要求（优先遵守）：\n· 语气：冷峻简短的军事简报口吻。"
     check("T14-5 附加提示词以「补充要求」整段追加在系统提示词末尾",
           sys_full == want, repr(sys_full[-50:]))
     check("T14-6 use_extra=False（启动自检通道）不受用户附加提示词影响",
-          sys_selfcheck == base, repr(sys_selfcheck[-30:]))
+          sys_selfcheck == base_en, repr(sys_selfcheck[-30:]))
+    check("T14-13 英语提示词含英语粗口锚例与口语范例",
+          all(k in base_en for k in ("fuck", "shit", "shut up",
+                                     "Listen, I've got something"))
+          and "дерьмо" not in base_en)
+    check("T14-14 提示词回显校验覆盖中英两版锚点",
+          ait.looks_like_prompt_echo(base_en[:80])
+          and ait.looks_like_prompt_echo(base[:80])
+          and not ait.looks_like_prompt_echo("这不是提示词，是正常译文。"))
 
     # 7) 多行输入框读写（Tk Text 语义 / Qt 语义都要兼容）
     class FakeTkText(object):
@@ -1635,7 +1644,8 @@ class _FakeServer:
         return True
 
     def translate(self, text, src, tgt, glossary_hits=None,
-                  timeout_sec=180, max_tokens=None, use_extra=True):
+                  timeout_sec=180, max_tokens=None, use_extra=True,
+                  extra_sys=None):
         self.calls.append(text)
         if self.fn is not None:
             return self.fn(text)
@@ -1742,7 +1752,17 @@ def t36_runtime_tokens():
     print("--- T36 占位符/目标语言 ---")
     text = "$level $name %s %c[255,1,255,255] \\n"
     masked, mapping = ait.mask_runtime_tokens(text)
-    check("T36-1 五类占位符全部 mask", len(mapping) == 5, str(mapping))
+    check("T36-1 四类功能占位符全部 mask（换行不再严格占位）",
+          len(mapping) == 4, str(mapping))
+    check("T36-1b 字面 \\n 可软转换并写回",
+          ait.escape_newlines(ait.unescape_newlines("第一行\\n第二行"))
+          == "第一行\\n第二行")
+    tech = "Оптимизация рендеринга травы — r2_details_opt"
+    masked_tech, mapping_tech = ait.mask_runtime_tokens(tech)
+    check("T36-1c 技术后缀被 mask，正文仍可译",
+          "r2_details_opt" in mapping_tech.values()
+          and "Оптимизация" in masked_tech
+          and ait.restore_runtime_tokens(masked_tech, mapping_tech) == tech)
     check("T36-2 mask 后能原样回填",
           ait.restore_runtime_tokens(masked, mapping) == text)
     check("T36-3 模型丢失占位符时不回填", ait.restore_runtime_tokens(
@@ -1770,7 +1790,7 @@ def t37_protected_text():
     print("--- T37 噪声/专名保护 ---")
     noise = [
         ("configs/text/rus/table.xml", "M57"),
-        ("configs/text/rus/table.xml", "8 x 9x18mm"),
+        ("configs/text/rus/table.xml", "AK-74M"),
         ("configs/text/rus/table.xml", "dead"),
         ("configs/text/rus/table.xml", "Copyright 2008 ReaL Studio"),
         ("configs/text/rus/table.xml", "~babah~ onItemDrop obj:"),
@@ -1797,6 +1817,17 @@ def t37_protected_text():
         check("T37-4 正常正文不保护：%s" % s[:24],
               not ait.looks_like_protected_text(
                   "configs/text/rus/table.xml", s))
+    for s in ("Набор 1", "Патроны 9х18мм ПМ", "30 х 5.45x39мм",
+              "8 x 9x18mm", "3D-прицелы", "Частота 60Гц"):
+        check("T37-5 数字正文不误判为型号：%s" % s[:24],
+              not ait.looks_like_code_or_debug(
+                  "configs/text/rus/table.xml", s))
+    for s in ('Former digger who raids all the desolate laboratories.',
+              'Stalker from the "Monolith" grouping. No details available.',
+              'Sentinel of the "Monolith" grouping.'):
+        check("T37-6 英语正文不被 f[A-Z] 误判：%s" % s[:24],
+              not ait.looks_like_code_or_debug(
+                  "configs/text/character_name/table.xml", s))
 
 
 # ----------------------------------------------------------------------
@@ -1901,8 +1932,9 @@ def t40_source_tags_literals():
                          encoding="utf-8").read()
         check("T40-3 UI 字面文本被抽成新 ID",
               "sgtat_gen_text_" in ui and "Привет из UI" not in ui)
-        check("T40-4 脚本字面文本被抽成新 ID",
-              "sgtat_gen_text_" in script and "Привет из скрипта." not in script)
+        check("T40-4 脚本字面文本被抽成新 ID 并包 game.translate_string",
+              'game.translate_string("sgtat_gen_text_' in script
+              and "Привет из скрипта." not in script)
         table = os.path.join(out, "configs", "text", "sgtat_auto_texts.xml")
         check("T40-5 生成字面文本表", os.path.isfile(table))
         if os.path.isfile(table):
@@ -1964,6 +1996,458 @@ def t41_cleanup_and_cp1251():
 
 
 # ----------------------------------------------------------------------
+# T42 脚本上下文/英语源文/提示词回显
+# ----------------------------------------------------------------------
+def t42_script_context_and_english():
+    print()
+    print("--- T42 脚本上下文/英语源文/提示词回显 ---")
+    check("T42-1 俄文/英文内容检测",
+          ait.detect_text_lang("Привет, сталкер.") == "rus"
+          and ait.detect_text_lang("Hello, stalker.") == "eng"
+          and ait.detect_text_lang("AK-74") == "")
+    check("T42-2 语言全名用中文（不再把 English 塞进中文句）",
+          ait.LANG_FULL.get("eng") == "英语"
+          and ait.LANG_FULL.get("rus") == "俄语")
+    check("T42-3 英语系统提示词含英语锚例",
+          "fuck" in ait.TRANSLATION_SYS_PROMPT_EN
+          and "Listen, I've got something" in ait.TRANSLATION_SYS_PROMPT_EN)
+
+    root = tempfile.mkdtemp(prefix="ait_ctx_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    os.makedirs(os.path.join(ind, "scripts"))
+
+    with io.open(os.path.join(ind, "scripts", "ctx.script"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write(
+            'local text = "Привет из скрипта."\n'
+            'log1("debug text")\n'
+            'if string_find(inv_name, "П:") == 1 then\n'
+            '  return trim(string_gsub(inv_name, "П:", "X"))\n'
+            'end\n'
+            'local tag = "logic_tag"\n'
+            'self.search:SetText("Кнопка поиска")\n'
+            'amk.send_tip("Подсказка игроку")\n')
+    with io.open(os.path.join(ind, "configs", "text", "rus", "eng.xml"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write('<string_table>\n'
+                '<string id="en1"><rus>Hello, stalker.</rus></string>\n'
+                '</string_table>\n')
+
+    class LangServer(_FakeServer):
+        def __init__(self):
+            _FakeServer.__init__(self)
+            self.langs = []
+
+        def translate(self, text, src, tgt, glossary_hits=None,
+                      timeout_sec=180, max_tokens=None, extra_sys=None):
+            self.calls.append(text)
+            self.langs.append((text, src))
+            return "译[" + text + "]"
+
+    srv = LangServer()
+    try:
+        job, ok, _logs = _run_ref_job(ait, ind, out, srv,
+                                      translate_literals=True,
+                                      protect_proper=False)
+        script = io.open(os.path.join(out, "scripts", "ctx.script"),
+                         encoding="utf-8").read()
+        check("T42-4 脚本正常完成", ok)
+        check("T42-5 显示类调用包 game.translate_string",
+              'self.search:SetText(game.translate_string(' in script
+              and 'amk.send_tip(game.translate_string(' in script
+              and 'local text = game.translate_string(' in script)
+        check("T42-6 log 调试串保持原样",
+              'log1("debug text")' in script)
+        check("T42-7 string_find/string_gsub 逻辑串保持原样",
+              'string_find(inv_name, "П:")' in script
+              and 'string_gsub(inv_name, "П:", "X")' in script)
+        check("T42-8 非文本变量/标签串保持原样",
+              'local tag = "logic_tag"' in script)
+        check("T42-9 脚本里没有裸 sgtat 全局引用",
+              script.count("sgtat_gen_text_")
+              == script.count('game.translate_string("sgtat_gen_text_'))
+        table = io.open(os.path.join(out, "configs", "text",
+                                     "sgtat_auto_texts.xml"),
+                        encoding="utf-8").read()
+        check("T42-10 生成表含脚本显示文本译文",
+              "译[Кнопка поиска]" in table
+              and "译[Подсказка игроку]" in table
+              and "译[Привет из скрипта.]" in table)
+        check("T42-11 英语源文按 eng 送翻（字段是 rus 也不误导）",
+              ("Hello, stalker.", "eng") in srv.langs
+              and not any(t == "Hello, stalker." and s == "rus"
+                          for t, s in srv.langs))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    # 提示词回显必须整条回退原文
+    root2 = tempfile.mkdtemp(prefix="ait_echo_")
+    ind2 = os.path.join(root2, "in")
+    out2 = os.path.join(root2, "out")
+    os.makedirs(os.path.join(ind2, "configs", "text", "rus"))
+    with io.open(os.path.join(ind2, "configs", "text", "rus", "echo.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="e1"><rus>Привет</rus></string>'
+                '</string_table>')
+    echo_srv = _FakeServer(fn=lambda t: ait.TRANSLATION_SYS_PROMPT_EN[:120])
+    try:
+        job2, ok2, _ = _run_ref_job(ait, ind2, out2, echo_srv,
+                                    translate_literals=False,
+                                    protect_proper=False)
+        body = io.open(os.path.join(out2, "configs", "text", "rus",
+                                    "echo.xml"), encoding="utf-8").read()
+        check("T42-12 提示词回显被拦截并保留原文",
+              ok2 and "<rus>Привет</rus>" in body
+              and "你是《潜行者" not in body)
+    finally:
+        shutil.rmtree(root2, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T43 多行/粗口重试
+# ----------------------------------------------------------------------
+def t43_multiline_profanity_retry():
+    print()
+    print("--- T43 多行/粗口重试 ---")
+    root = tempfile.mkdtemp(prefix="ait_retry_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus", "r.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table>\n'
+                '<string id="m1"><rus>Первая строка.\\nВторая строка.</rus></string>\n'
+                '<string id="m2"><rus>Один.\\nДва.\\nТри.</rus></string>\n'
+                '<string id="p1"><rus>Ну а на хрен тебе не пойти?</rus></string>\n'
+                '</string_table>\n')
+
+    calls = {"m1": 0, "m2": 0, "p1": 0}
+
+    def fn(text):
+        if "Первая" in text:
+            calls["m1"] += 1
+            return "合并成一行" if calls["m1"] == 1 else "第一行\n第二行"
+        if "Один" in text:
+            calls["m2"] += 1
+            return "第一句。第二句。第三句。"
+        if "хрен" in text:
+            calls["p1"] += 1
+            return "那你就别去了吧？" if calls["p1"] == 1 \
+                else "你他妈怎么还不滚？"
+        return "译[" + text + "]"
+
+    srv = _FakeServer(fn=fn)
+    try:
+        job, ok, _logs = _run_ref_job(ait, ind, out, srv,
+                                      protect_proper=False)
+        body = io.open(os.path.join(out, "configs", "text", "rus",
+                                    "r.xml"), encoding="utf-8").read()
+        check("T43-1 多行合并被重试并写回字面 \\n",
+              ok and "第一行\\n第二行" in body and calls["m1"] == 2)
+        check("T43-3 重试仍合并时按句末标点补回换行",
+              "第一句。\\n第二句。\\n第三句。" in body and calls["m2"] >= 2)
+        check("T43-2 粗口软化被重试并保留力度",
+              "你他妈怎么还不滚" in body and calls["p1"] == 2)
+        check("T43-4 粗口判定不误伤普通词（操作/可靠）",
+              not ait.has_zh_profanity("正在操作设备，这很可靠")
+              and ait.has_zh_profanity("你他妈闭嘴"))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T44 问题文件筛选/无中文重试
+# ----------------------------------------------------------------------
+def t44_problem_file_filters():
+    print()
+    print("--- T44 问题文件筛选/无中文重试 ---")
+    cases = [
+        ("configs/text/ui/stable_pc_text.xml", "Аномалии.html"),
+        ("configs/text/ui/ui_sss.xml",
+         "[ТРЕБУЕТСЯ ПЕРЕЗАПУСК] Включение/выключение коллизии"),
+        ("configs/text/character_name/stable_sms_character_name.xml",
+         "ГОЛЬФСТРИМ 7-2"),
+        ("configs/text/encyclopedia/string_table_enc_zone.xml", "ЧАЭС-2"),
+        ("configs/text/news/news.xml", "[источник неизвестен]"),
+    ]
+    for rel, s in cases:
+        check("T44-1 可见文件名/标签/大写名不误跳：%s" % s[:26],
+              not ait.looks_like_code_or_debug(rel, s))
+    check("T44-2 纯型号仍跳过", ait.looks_like_code_or_debug(
+        "configs/text/rus/x.xml", "AK-74M"))
+    root = tempfile.mkdtemp(prefix="ait_complete_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus", "c.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="c1">'
+                '<rus>Worldwide Publishing</rus></string></string_table>')
+    calls = {"n": 0}
+
+    def fn(text):
+        calls["n"] += 1
+        return ("Worldwide Publishing" if calls["n"] == 1
+                else "全球发行")
+
+    srv = _FakeServer(fn=fn)
+    try:
+        job, ok, _ = _run_ref_job(ait, ind, out, srv, protect_proper=False)
+        body = io.open(os.path.join(out, "configs", "text", "rus", "c.xml"),
+                       encoding="utf-8").read()
+        check("T44-3 模型回显英文时按完整性重试并写中文",
+              ok and "全球发行" in body and calls["n"] == 2)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T45 通用硬词收敛/技术精确/会话词表缓存
+# ----------------------------------------------------------------------
+def t45_term_layers_session_cache():
+    print()
+    print("--- T45 硬词收敛/技术精确/会话词表 ---")
+    check("T45-1 人物名不再全局硬词（Крот）", "Крот" not in ait.load_hard_glossary_keys())
+    check("T45-2 宇宙概念仍是硬词（Псевдогигант）",
+          "Псевдогигант" in ait.load_hard_glossary_keys())
+    root = tempfile.mkdtemp(prefix="ait_sess_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    cache = os.path.join(root, "cache")
+    os.makedirs(os.path.join(ind, "configs", "text", "character_name"))
+    with io.open(os.path.join(ind, "configs", "text", "character_name",
+                             "names.xml"), "w", encoding="utf-8",
+                 newline="\n") as f:
+        f.write('<string_table>'
+                '<string id="n1_name"><rus>Иванов</rus></string>'
+                '<string id="u1"><rus>ч.</rus></string>'
+                '</string_table>')
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, ind, "auto", "auto", "chs",
+            out_dir=out, glossary={}, force_glossary=False,
+            hard_glossary_keys=set(), log=lambda *a, **k: None,
+            reference_mode=False, copy_reference=False,
+            protect_proper=False, translate_literals=False,
+            auto_session_terms=True, session_cache_dir=cache)
+        ok = job.run()
+        body = io.open(os.path.join(out, "configs", "text",
+                                    "character_name", "names.xml"),
+                       encoding="utf-8").read()
+        check("T45-3 会话词表翻译人名", ok and "译[Иванов]" in body)
+        check("T45-4 技术精确表译单位", "小时" in body)
+        check("T45-5 会话词表已落缓存",
+              job.session_stats.get("candidates", 0) >= 1
+              and any(x.endswith(".json") for x in os.listdir(cache)))
+        class NoCall(_FakeServer):
+            def translate(self, *a, **k):
+                raise AssertionError("缓存命中时不应再请求模型")
+        job2 = ait.TranslationJob(
+            ait._load_vendor(), NoCall(), ind, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out2"), glossary={},
+            force_glossary=False, hard_glossary_keys=set(),
+            log=lambda *a, **k: None, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=True,
+            session_cache_dir=cache)
+        ok2 = job2.run()
+        body2 = io.open(os.path.join(root, "out2", "configs", "text",
+                                     "character_name", "names.xml"),
+                        encoding="utf-8").read()
+        check("T45-6 第二次运行命中会话缓存、零模型请求",
+              ok2 and "译[Иванов]" in body2 and "小时" in body2)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T46 ANTHOLOGY 2.1 A/B
+# ----------------------------------------------------------------------
+def t46_anthology_terms():
+    print()
+    print("--- T46 ANTHOLOGY 2.1 软词/纠错 ---")
+    gloss, _set, _deleted, _clear = ait.load_glossary_layers()
+    check("T46-1 新人物软词", gloss.get("Стычинский") == "斯季钦斯基")
+    check("T46-2 新物品软词", gloss.get("кевларовые пластины") == "凯夫拉板")
+    check("T46-3 软词不进硬词",
+          "Стычинский" not in ait.load_hard_glossary_keys()
+          and "кевларовые пластины" not in ait.load_hard_glossary_keys())
+    check("T46-4 B 档纠错：Мутант→变异体，Мутанты→变种人，Седых→灰白",
+          gloss.get("Мутант") == "变异体"
+          and gloss.get("Мутанты") == "变种人"
+          and gloss.get("Седых") == "灰白")
+    check("T46-5 未确认冲突保持 NS 标准；Шрам=疤脸",
+          gloss.get("Доктор") == "医生"
+          and gloss.get("Леший") == "林妖"
+          and gloss.get("Прапор") == "准尉"
+          and gloss.get("Шрам") == "疤脸")
+
+
+# ----------------------------------------------------------------------
+# T47 术语库 v2：canon/names/technical + 变体/大小写
+# ----------------------------------------------------------------------
+def t47_termbase_v2():
+    print()
+    print("--- T47 术语库 v2 分层/变体 ---")
+    data = ait.load_termbase_data()
+    meta = data.get("_meta") or {}
+    layers = ait.load_term_layers()
+    check("T47-1 术语库 v2 元数据",
+          meta.get("format") == "stalker-toolkit-termbase/2"
+          and meta.get("layers", {}).get("canon")
+          and meta.get("layers", {}).get("technical"))
+    check("T47-2 四层规模：canon 1377 / names 3068 / technical 18",
+          len(layers["canon"]) == 1377
+          and len(layers["names"]) == 3068
+          and len(layers["technical"]) == 18,
+          "%d/%d/%d" % (len(layers["canon"]), len(layers["names"]),
+                        len(layers["technical"])))
+    check("T47-3 技术词数据化并进入术语库",
+          layers["technical"].get("ч.") == "小时"
+          and layers["technical"].get("RU") == "俄语"
+          and ait.load_technical_exact().get("м/с") == "米/秒")
+    check("T47-4 names 不进入硬词",
+          "Кот" not in ait.load_hard_glossary_keys()
+          and "Псевдогигант" in ait.load_hard_glossary_keys())
+    gloss, _s, _d, _c = ait.load_glossary_layers()
+    idx = ait.GlossaryIndex(gloss,
+                            case_sensitive=layers["case_sensitive"],
+                            variants=layers["variants"])
+    got = idx.find("Гришачев и Гришачёв")
+    check("T47-5 ё/е 变体归一到规范词条",
+          got and all(k == "Гришачёв" for _, _, k in got)
+          and idx.hits("Гришачев")[0][1] == "格里沙乔夫",
+          str(got))
+    got2 = idx.find("Санёк")
+    check("T47-6 人物变体归一（Санёк→Санек）",
+          got2 and got2[0][2] == "Санек"
+          and idx.hits("Санёк")[0][1] == "萨涅克", str(got2))
+    check("T47-7 小写拉丁专名不误伤正文，大写专名仍命中",
+          idx.find("crystal") == [] and idx.find("bar") == []
+          and [k for _, _, k in idx.find("Crystal")] == ["crystal"]
+          and [k for _, _, k in idx.find("Bar")] == ["bar"])
+    check("T47-8 人物名首字母大小写敏感",
+          [k for _, _, k in idx.find("Кот спит")] == ["Кот"]
+          and idx.find("кот спит") == [])
+    check("T47-9 审计脚本无 blocking/high",
+          subprocess.run([sys.executable,
+                          os.path.join(ROOT, "tools", "audit_termbase.py"),
+                          "--strict"],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT).returncode == 0)
+
+
+# ----------------------------------------------------------------------
+# T48 TM-lite：高重复门控 + 精确复用
+# ----------------------------------------------------------------------
+def t48_tm_lite():
+    print()
+    print("--- T48 TM-lite 门控/复用 ---")
+
+    def build(n_unique, n_dup):
+        rows = ['<string_table>']
+        for i in range(n_unique):
+            rows.append('<string id="u%d"><text>Уникальная строка номер %d.'
+                        '</text></string>' % (i, i))
+        for i in range(n_dup):
+            rows.append('<string id="d%d"><text>Повторяющийся текст задачи.'
+                        '</text></string>' % i)
+        rows.append('</string_table>')
+        return "\n".join(rows)
+
+    def run_case(n_unique, n_dup):
+        root = tempfile.mkdtemp(prefix="ait_tm_")
+        ind = os.path.join(root, "in")
+        out = os.path.join(root, "out")
+        os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+        with io.open(os.path.join(ind, "configs", "text", "rus", "t.xml"),
+                     "w", encoding="utf-8", newline="\n") as f:
+            f.write(build(n_unique, n_dup))
+        with io.open(os.path.join(ind, "configs", "localization.ltx"),
+                     "w", encoding="utf-8", newline="\n") as f:
+            f.write("[string_table]\nlanguage = rus\nfiles = t\n")
+        srv = _FakeServer()
+        try:
+            job, ok, _logs = _run_ref_job(
+                ait, ind, out, srv, protect_proper=False, tm_lite=True)
+            body = io.open(os.path.join(out, "configs", "text", "rus",
+                                        "t.xml"), encoding="utf-8").read()
+            return job, ok, srv, body
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    total = 50
+    unique = 30
+    dup = total - unique
+    job, ok, srv, body = run_case(unique, dup)
+    check("T48-1 高重复表启用 TM-lite（38%%）",
+          ok and (job._tm_local_enabled or job._tm_global_enabled)
+          and job.tm_stats.get("scope") in ("table", "global"),
+          str(job.tm_stats))
+    check("T48-2 重复句只请求一次并复用译文",
+          len(srv.calls) == unique + 1
+          and job.tm_stats.get("hits") == dup - 1
+          and body.count("译[Повторяющийся текст задачи.]") == dup,
+          "calls=%d hits=%d body=%d"
+          % (len(srv.calls), job.tm_stats.get("hits", 0),
+             body.count("译[Повторяющийся текст задачи.]")))
+
+    job2, ok2, srv2, _body2 = run_case(48, 2)
+    check("T48-3 低重复表不启用、请求数不变（4%%）",
+          ok2 and not job2._tm_local_enabled
+          and len(srv2.calls) == 50,
+          "calls=%d" % len(srv2.calls))
+
+    # 占位符参与缓存键：同句不同变量不会互相复用。
+    check("T48-4 缓存键包含占位符与换行签名",
+          job._tm_key("Привет $name", "rus")
+          != job._tm_key("Привет $other", "rus")
+          and job._tm_key("A\\nB", "rus") != job._tm_key("A B", "rus"))
+    check("T48-5 全局门控阈值可判定",
+          job._tm_should_enable({"total": 50, "unique": 30})
+          and not job._tm_should_enable({"total": 50, "unique": 45})
+          and not job._tm_should_enable({"total": 10, "unique": 5}))
+
+
+# ----------------------------------------------------------------------
+# T49 控制符丢失重试
+# ----------------------------------------------------------------------
+def t49_placeholder_retry():
+    print()
+    print("--- T49 控制符丢失重试 ---")
+    root = tempfile.mkdtemp(prefix="ait_ph_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus", "p.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="p1">'
+                '<rus>Привет, $name! Урон %s.</rus></string></string_table>')
+    calls = {"n": 0}
+
+    def fn(text):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "你好，伤害。"
+        return "你好，$$R0$$！伤害 $$R1$$。"
+
+    srv = _FakeServer(fn=fn)
+    try:
+        job, ok, _ = _run_ref_job(ait, ind, out, srv,
+                                  protect_proper=False, tm_lite=False)
+        body = io.open(os.path.join(out, "configs", "text", "rus", "p.xml"),
+                       encoding="utf-8").read()
+        check("T49-1 控制符丢失后重试并按原文回填",
+              ok and calls["n"] == 2 and "$name" in body and "%s" in body,
+              "calls=%d" % calls["n"])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -1978,7 +2462,11 @@ def main():
                t34_engine_mem_and_slow_log, t35_reference_layer,
                t36_runtime_tokens, t37_protected_text,
                t38_noop_bom_preview, t39_reference_wiring,
-               t40_source_tags_literals, t41_cleanup_and_cp1251):
+               t40_source_tags_literals, t41_cleanup_and_cp1251,
+               t42_script_context_and_english,
+               t43_multiline_profanity_retry, t44_problem_file_filters,
+               t45_term_layers_session_cache, t46_anthology_terms,
+               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry):
         try:
             fn()
         except Exception as e:

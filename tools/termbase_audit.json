@@ -1,0 +1,193 @@
+{
+ "format": "stalker-toolkit-termbase/2",
+ "total": 8855,
+ "layers": {
+  "canon": 1377,
+  "names": 3068,
+  "technical": 18,
+  "reference": 148
+ },
+ "categories": {
+  "阵营与组织": 34,
+  "人物与军衔": 3068,
+  "地点与区域": 393,
+  "变异生物": 69,
+  "物品·武器·装备·神器": 881,
+  "任务": 908,
+  "百科与术语": 2964,
+  "界面与提示": 345,
+  "新闻·对话·其他": 27,
+  "ANTHOLOGY 参考": 148,
+  "技术缩写": 18
+ },
+ "variants": 3,
+ "case_sensitive": 30,
+ "risky_latin_canon": 30,
+ "quoted_keys": 158,
+ "cross_layer_conflicts": 5,
+ "case_conflicts": 0,
+ "checks": [
+  {
+   "severity": "ok",
+   "code": "schema",
+   "detail": "v2 元数据/分层 完整",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "same_source_conflict",
+   "detail": "规范化同源、译文不同（不含仅引号差异）：0 组",
+   "samples": []
+  },
+  {
+   "severity": "medium",
+   "code": "quoted_vs_bare",
+   "detail": "引号形态不同且译文不同（不同源串，运行时不合并）：5 组",
+   "samples": [
+    "'loners' -> [('阵营与组织', '\"Loners\"', '“中立者”'), ('百科与术语', 'Loners', '独行者潜行者')]",
+    "'army' -> [('阵营与组织', '\"Army\"', '“军事”'), ('百科与术语', 'Army', '军方')]",
+    "'battery' -> [('物品·武器·装备·神器', 'Battery', '蓄电池'), ('百科与术语', '\"Battery\"', '“电池”')]",
+    "'inferno' -> [('百科与术语', '\"Inferno\"', '“炼狱”'), ('百科与术语', 'Inferno', '地狱')]",
+    "'burner' -> [('百科与术语', '\"Burner\"', '“炙烤”'), ('百科与术语', 'Burner', '燃烧器')]"
+   ]
+  },
+  {
+   "severity": "ok",
+   "code": "case_conflict",
+   "detail": "仅大小写/ё 不同且译文冲突：0 组",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "empty",
+   "detail": "空原文/空译文：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "cjk_source",
+   "detail": "原文含中文：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "target_no_cjk",
+   "detail": "非技术层译文不含中文：0 条",
+   "samples": []
+  },
+  {
+   "severity": "low",
+   "code": "identity",
+   "detail": "非技术层原文=译文：1 条",
+   "samples": [
+    [
+     "物品·武器·装备·神器",
+     "PDA",
+     "PDA"
+    ]
+   ]
+  },
+  {
+   "severity": "ok",
+   "code": "placeholder",
+   "detail": "占位符集合不一致：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "sentence_in_canon",
+   "detail": "canon 层疑似长句/带句末标点：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "inflection_conflict",
+   "detail": "同分类屈折形译名冲突：0 组",
+   "samples": []
+  },
+  {
+   "severity": "medium",
+   "code": "inflection_cross_cat",
+   "detail": "跨分类同词干不同译名（可能是不同概念）：1 组",
+   "samples": [
+    "地点与区域:Генераторы→焦脑器 / 物品·武器·装备·神器:Генератор→干扰器"
+   ]
+  },
+  {
+   "severity": "low",
+   "code": "risky_latin_canon",
+   "detail": "小写单单词拉丁 canon（运行时仅认大写专名）：30 条",
+   "samples": [
+    "bar",
+    "bubble",
+    "clutcher",
+    "crystal",
+    "drifter",
+    "droplets",
+    "emerald",
+    "fireball",
+    "flash",
+    "fountain",
+    "frosty",
+    "gravi",
+    "hide",
+    "lift",
+    "mica",
+    "oasis",
+    "pellicle",
+    "porcupine",
+    "pulsar",
+    "pulse"
+   ]
+  },
+  {
+   "severity": "ok",
+   "code": "technical_missing",
+   "detail": "插件 _TECHNICAL_EXACT 未登记进术语库：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "technical_mismatch",
+   "detail": "技术词译文与插件常量不一致：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "variant_target",
+   "detail": "变体映射指向不存在的词条：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "variant_value",
+   "detail": "变体与规范词条译文不同：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "case_policy",
+   "detail": "风险拉丁词未写入 case_sensitive：0 条",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "copy_sync",
+   "detail": "工具库与随包副本：plugins\\ai_translate_assets\\stalker_termbase.json=一致",
+   "samples": []
+  },
+  {
+   "severity": "ok",
+   "code": "builtin_sync",
+   "detail": "glossary_builtin.json 与分类库摊平结果：一致",
+   "samples": []
+  }
+ ],
+ "severity": {
+  "blocking": 0,
+  "high": 0,
+  "medium": 2,
+  "low": 2,
+  "ok": 16
+ }
+}

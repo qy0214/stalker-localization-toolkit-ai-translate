@@ -4,6 +4,10 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
+**当前版本 1.9.0（2026-10-30）**：标准术语库 v2（canon/names/technical +
+会话词表）、TM-lite 高重复精确复用；1000 条 A/B 术语采纳率 96.8% vs 35.7%；
+复杂文本表 800 条 + 大文本表 200 条回归 0 漏译。完整变更见下文。
+
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
 ## 安装
@@ -45,28 +49,40 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.7.5.zip` | 可直接分发的插件包 |
-| `tests/` | 189 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.9.0.zip` | 可直接分发的插件包 |
+| `tests/` | 251 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.7.5`
+- 插件版本：`ai_translate 1.9.0`
 - 当前 zip SHA-256：
-  `f35558f112fec86ec525288ac086837da70d545fd66f0257cc4d4cabbfdfcd66`
+  `290584721b8fad613654a4470c567440e8d270684028cad6937cb3706faec53c`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 3 个 HuggingFace 模型
-- 术语规模：`glossary_builtin.json` 8246 条 / `stalker_termbase.json` 8246 条
+- 术语规模：`glossary_builtin.json` 8855 条 / `stalker_termbase.json` 8855 条；
+  canon 1377 / names 3068 / technical 18 / reference 148
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.0.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.7.5 变更摘要
+## 1.6.0 – 1.9.0 变更摘要
 
+- **1.9.0**：标准术语库 v2 —— 随包库明确分成 canon（1377 硬词）/
+  names（3068 人物软层）/ technical（18 条整条精确）/ reference（148 条参考软词）；
+  运行时索引补 ё/е 变体归一、拼写变体映射、names 与小写拉丁 canon 的首字母
+  大小写敏感（`crystal` 不再命中正文普通名词，`Crystal` 神器仍命中）。
+  新增 `tools/audit_termbase.py` 质量审计（跨层冲突/屈折形/占位符/技术词/
+  副本一致性）与 `tools/ab_glossary_1000.py` 1000 条 A/B。实测（1.8B、温度 0、
+  同一提示词，只切换术语提示）：术语采纳率 **96.8% vs 35.7%**，整条全采纳
+  **95.4% vs 24.9%**，A 更好 717 / B 更好 1 / 持平 282；canon 97.0% vs 33.9%，
+  names 软层 96.3% vs 39.8%。新增 TM-lite：仅当同一批文本精确重复率 ≥20%
+  且样本 ≥40 时启用同源复用，不做模糊匹配、不建跨 MOD 持久库。复杂脚本 +
+  大文本表回归保持 0 漏译。
 - **附加提示词真正生效**：原先在工作线程里读 Tk 控件，必然抛
   `main thread is not in main loop` 并被吞成空串 —— 功能实际从未工作。
   现在由 UI 线程读好并缓存，工作线程只读缓存。
@@ -102,6 +118,23 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
 - **1.7.2**：继续修卡死 —— llama-server 日志从最大 verbose 降到 `-lv 4`
   （单次 25 MB / 28 万行 → 约 16 KB），GPU 上卡判定仍可用；条目级进度
   （峰值 470 条/秒）改为只写运行日志，界面只保留每 50 个文件一条进度。
+- **1.8.2**：按你的确认修正 ANTHOLOGY B 档：Мутант→变异体、Мутанты→变种人、Седых→灰白，并补入 Шрам→疤脸（人物软词）。术语库 8838。
+- **1.8.1**：合并 ANTHOLOGY 2.1 的 A+B 档 —— 从 62,118 条对齐语料中
+  筛出 148 条高置信人物/装备软词，放入 `ANTHOLOGY 参考` 分类（不硬替换）；
+  人工确认 3 条纠错（Мутант/Мутанты→变异体，Седых→谢德赫）；未确认冲突和
+  `Шрам` 不并入。术语库 8689→8837，硬词仍 1377。
+- **1.8.0**：术语体系分层 —— 通用术语库只保留宇宙稳定硬词（阵营/地点/变异体/
+  神器，1377 条），人物名转精确/软提示；新增运行时**会话词表**：扫描当前 MOD
+  的人名/物品/地点候选，批量翻译、校验、本机缓存，不要求每 MOD 手工建档；
+  新增技术精确表（单位等）与可选 `tools/build_mod_terms.py` 参考补丁词表。
+- **1.7.6**：正确性与多 MOD 适配 —— 修 1.7.5 字面文本层的裸 ID 缺陷：
+  63 个脚本曾被写成 `sgtat_gen_text_*` 全局变量（nil），现统一改为
+  `game.translate_string("...")`，并只改显示类调用/文本变量；log、
+  `string_find`/`string_gsub`、比较串保持原样。新增英语源文识别与英语
+  提示词（语言全名、英语粗口/口语锚例、英语功能词过滤）；数字/型号误判
+  与 `f[A-Z]` 调试正则收窄（回收 579 条漏译）；多行文本改软换行 + 换行
+  保真重试；提示词回显/粗口软化硬校验；术语库从 NS7 多版本、OP、OLR25、
+  疤脸、WOT 多源重建到 8689 条（人名/物品/变异体 443 条新增、57 条纠错）。
 - **1.7.5**：针对新 MOD 的错误率优化 —— 源语言默认 **rus**（不再把英语意译当原文，
   修掉 all right→“所有 向右”、rest→“休息”这类错误）；去掉“ogg 子串命中就整表
   跳过”和 name/credits/weapons 整类跳过（实测漏掉 2 万条对话/人名/百科）；
@@ -132,7 +165,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.7.3.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 189 项回归测试
+# 251 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性
@@ -143,12 +176,21 @@ python tools/gen_release_manifest.py
 python tools/gen_release_manifest.py --check
 ```
 
-术语库构建链：
+术语库构建 / 审计 / 实测链：
 
 ```powershell
 cd tools
 python build_glossary.py
 python build_termbase.py
+python upgrade_termbase_v2.py   # 分层、变体、技术词、人工修正
+python audit_termbase.py --strict
+python ab_glossary_1000.py      # 1000 条开/关术语 A/B（需本机引擎）
+```
+
+复杂脚本 + 大文本表回归（复用已冻结的 30 个输入）：
+
+```powershell
+python tools/regress_complex_large.py
 ```
 
 术语构建的全部输入（`raw_pairs.json`、三本词典、人工三语表）都随仓库分发，

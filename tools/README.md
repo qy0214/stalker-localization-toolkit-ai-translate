@@ -42,3 +42,82 @@ python build_termbase.py
 - `<用户数据目录>/glossary_user.json`：**用户覆盖层**，插件界面里的新增/删除/清空写在这里，
   格式为 `{"_format": "ai-translate-glossary-user/1", "set": {...}, "del": [...],
   "clear_builtin": false}`；旧版扁平文件会被自动识别为"与内置的差异"并迁移。
+
+## 多 MOD 术语挖掘（1.7.6）
+
+`build_multisource_terms.py` 按 `<string id>` 跨目录对齐 NS7 各版本、NS 2/19、
+OP、OLR25、疤脸、WOT 的汉化补丁，只产出高置信度名词术语（人名、地点、变异体、
+物品/神器），并把冲突写进 `multisource_report.md`；不会自动覆盖未确认的旧词。
+
+```powershell
+# 1) 以“合并前的术语库”作为 baseline（否则词已在新库里，会被当成已存在）
+git show HEAD:tools/stalker_termbase.json > "$env:TEMP\termbase_base.json"
+python tools/build_multisource_terms.py --baseline "$env:TEMP\termbase_base.json"
+python tools/merge_multisource_terms.py
+```
+
+- `multisource_terms.json`：新增/人工确认覆盖/冲突/分类移动，是合并的输入；
+- `merge_multisource_terms.py`：写入 `tools/stalker_termbase.json`、插件随包副本和
+  `glossary_builtin.json`；
+- 运行前请确认 `C:\game` 下的补丁路径仍存在；路径在脚本顶部 `DEFAULT_PATCHES`。
+
+> 术语库仍是“随包只读”；用户覆盖层在 `%LOCALAPPDATA%`，不会被本流程清掉。
+
+## 术语库 v2 / 质量审计 / A-B（1.9.0）
+
+```powershell
+python tools/upgrade_termbase_v2.py   # 分层、变体、技术词、人工修正（幂等）
+python tools/audit_termbase.py --strict
+python tools/ab_glossary_1000.py      # 需要本机 llama-server + 1.8B 模型
+python tools/regress_complex_large.py # 20 个复杂脚本 + 10 个大文本表
+```
+
+- `upgrade_termbase_v2.py`：把分类库升级到 `stalker-toolkit-termbase/2`，
+  写 `_meta.layers`（canon/names/technical/reference）、`_meta.variants`、
+  `_meta.case_sensitive`，并把插件里的 `_TECHNICAL_EXACT` 数据化；
+  同时应用高置信修正（引号形态/屈折形/交叉层冲突）与移除项。重复运行安全。
+- `audit_termbase.py`：检查跨层同源冲突、同分类屈折冲突、空值、占位符、
+  CJK 缺失、长句误入 canon、技术词漏登记、变体指向、副本一致性。
+  产物 `termbase_audit_report.md` / `.json`；`--strict` 在 blocking/high 时退出 1。
+- `ab_glossary_1000.py`：固定模型/温度/提示词，只切换术语提示，统计
+  术语采纳率、整条全采纳率、格式完整性；默认读 NS7 源文，结果写桌面报告目录。
+- `regress_complex_large.py`：复用冻结的 S01–S20（脚本字面层）与
+  Q01–Q10（大表，带中文参考）输入，和新版/旧版基线对比。
+
+## 可选：从当前 MOD 的补丁抽参考词表（不写入通用库）
+
+用户手上有某个 MOD 的汉化补丁时，可先抽一份该 MOD 的高置信名词，导入插件的
+“术语 → 导入JSON”，作为本次任务的参考层：
+
+```powershell
+python tools/build_mod_terms.py `
+  --base "D:\MOD\gamedata" `
+  --patch "D:\MOD\汉化\gamedata" `
+  --out "D:\MOD\mod_terms.json"
+```
+
+- 输出分类 `参考补丁`，插件会自动摊平；
+- 只抽名词形，补丁可能有误，工具不保证正确性；
+- 不写 `stalker_termbase.json`，不影响其它 MOD；
+- 通用库仍是随包的一份，角色名/物品名由运行时“会话词表”处理。
+
+## ANTHOLOGY 2.1 补充词（1.8.1）
+
+`tools/anthology_terms_soft.json` 收录从 ANTHOLOGY 2.1 汉化包筛出的
+148 条高置信新词（53 人物 + 95 物品/装备），全部放在 `ANTHOLOGY 参考`
+软分类；另含 3 条人工纠错（Мутант/Мутанты→变异体，Седых→谢德赫）。
+`Шрам` 不并入通用库，留给会话词表/参考补丁。
+
+```powershell
+python tools/merge_anthology_terms.py
+```
+
+重建顺序：
+
+```text
+build_glossary -> build_termbase -> build_multisource_terms --apply
+-> merge_anthology_terms
+```
+
+`ANTHOLOGY 参考` 不在 `_HARD_TERM_CATEGORIES` 中，只做精确/软提示，
+不会跨 MOD 硬替换。
