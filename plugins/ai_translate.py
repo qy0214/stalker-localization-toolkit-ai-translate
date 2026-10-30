@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.1",
+    "version": "1.9.4",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -505,6 +505,8 @@ def session_term_shape(src, cat):
     if re.search(r"[.!?。！？；;:，,]", s):
         return ""
     if not re.search(r"[А-Яа-яЁёA-Za-z]", s):
+        return ""
+    if cat == "物品·武器·装备·神器" and looks_like_model_name(s):
         return ""
     return s
 
@@ -2578,6 +2580,55 @@ _DEBUG_LIKE_RE = re.compile(
 _DEBUG_PHRASES = {"dead", "none", "null", "true", "false",
                   "avail end", "start here", "reinit timer"}
 
+# 口径/型号不是“正文”：9x18 PM、5.56x45 M995 AP、12.7x99mm、.44 Magnum
+# 这类短技术串必须整串保留，不能被模型当时间/自动步枪翻译。
+_TECH_SPEC_RE = re.compile(
+    r"^\s*(?:\d+\s*[x×]\s*)?\d+(?:[.,]\d+)?\s*[x×]\s*"
+    r"\d+(?:[.,]\d+)?(?:\s*[A-Za-z0-9.+/\-]{0,12})?\s*$", re.I)
+_TECH_CALIBER_RE = re.compile(
+    r"^\s*\.\d{2,3}\s+[A-Za-z][A-Za-z0-9 .\-/]{0,24}$", re.I)
+
+
+def looks_like_technical_text(text):
+    """口径/弹药/尺寸类整串：只做技术串保护，不当普通正文。"""
+    s = str(text or "").strip()
+    if not s or len(s) > 60 or re.search(r"[。！？!?；;]", s):
+        return False
+    if _TECH_SPEC_RE.match(s) or _TECH_CALIBER_RE.match(s):
+        return True
+    return bool(re.search(r"\d+(?:[.,]\d+)?\s*[x×]\s*\d+(?:[.,]\d+)?", s))
+
+
+def looks_like_generated_noise(rel, text):
+    """旧的 ___scriptE__ / ___cfgxml__ 生成表：短 ASCII 多是日志/键名。"""
+    low = (rel or "").lower().replace("\\", "/")
+    if "___scripte__" not in low and "___cfgxml__" not in low:
+        return False
+    s = str(text or "").strip()
+    if not s or len(s) > 80 or re.search(r"[。！？!?；;]", s):
+        return False
+    if s.isascii():
+        return True
+    return bool(re.search(
+        r"^(?:gulag|ignored|selected|actor\s+(?:start|end)|spawn|id):",
+        s, re.I))
+
+
+def looks_like_model_name(text):
+    """纯拉丁武器/物品型号名：会话词表不应把它们当人名/普通物品翻译。"""
+    s = str(text or "").strip()
+    if not s or not re.search(r"[A-Za-z]", s):
+        return False
+    if re.search(r"\d", s) or re.search(r"[“”\"'«»/]", s):
+        return True
+    if re.search(r"[A-Z]{2,}", s):
+        return True
+    if "-" in s and len(s.split()) >= 2:
+        return True
+    caps = sum(1 for w in s.split() if w[:1].isupper())
+    return s.isascii() and caps >= 2
+
+
 def _has_translatable_text(text):
     """剔除运行期占位符后仍有 2 个以上连续字母，才值得送翻。"""
     clean = _RUNTIME_TOKEN_RE.sub("", text or "")
@@ -2649,11 +2700,25 @@ def looks_like_identifier_text(text):
     return False
 
 
+def looks_like_hard_protected_file(rel):
+    """制作名单/音乐列表：连核心术语也不替换；武器短名只保护非词库型号。"""
+    low = (rel or "").lower().replace("\\", "/")
+    return any(x in low for x in ("credits", "ogg", "music", "songs"))
+
+
 def looks_like_proper_text(rel, text):
     """专名/歌名/型号：只在用户勾选“保护专名”时跳过。"""
     s = (text or "").strip()
     if not s:
         return False
+    low = (rel or "").lower().replace("\\", "/")
+    # 文件级强保护：制作名单、音乐/歌曲列表整张表都不翻；人物/武器/名字表
+    # 只保护短名，长描述仍交给模型（例如武器说明）。
+    hint = next((h for h in _PROTECT_FILE_HINTS if h in low), "")
+    if looks_like_hard_protected_file(rel):
+        return True
+    if hint == "enc_weapons" and len(s) <= 40 and len(s.split()) <= 6:
+        return True
     if (_TITLE_LIKE_RE.match(s) or _TITLE_DASH_RE.match(s)
             or _MODEL_LIKE_RE.match(s)):
         return True
@@ -2724,6 +2789,35 @@ def strip_script_comment(line):
                 out.append(ch)
         i += 1
     return "".join(out)
+
+
+_SCRIPT_EXTRA_DISPLAY_RES = (
+    re.compile(
+        r"(?:set_level_changer_invitation|set_description)\s*\(\s*"
+        r"([\"'])(.*?)\1", re.S),
+    re.compile(
+        r"AddItem\s*\(\s*game\.translate_string\s*\(\s*([\"'])(.*?)\1",
+        re.S),
+)
+_SCRIPT_TRANSLATE_ARG_RE = re.compile(
+    r"game\.translate_string\s*\(\s*([\"'])(.*?)\1", re.S)
+
+
+def extra_script_display_literals(whole):
+    """补上游漏掉的显示调用字面串（只收西里尔文本，避免碰 ID/代码）。"""
+    out = set()
+    for pattern in _SCRIPT_EXTRA_DISPLAY_RES:
+        for m in pattern.finditer(whole or ""):
+            inner = m.group(2)
+            if re.search(r"[А-Яа-яЁё]", inner):
+                out.add(m.group(1) + inner + m.group(1))
+    return out
+
+
+def script_translate_literal_args(whole):
+    """已包在 game.translate_string(...) 里的字面串：替换时不能再套一层。"""
+    return {m.group(1) + m.group(2) + m.group(1)
+            for m in _SCRIPT_TRANSLATE_ARG_RE.finditer(whole or "")}
 
 
 def script_literal_allowed(line, literal):
@@ -3299,6 +3393,9 @@ class TranslationJob(object):
         self.session_cache_dir = session_cache_dir or os.path.join(
             _DATA_ROOT, "session_terms")
         self.session_keys = set()
+        # 会话词条只做提示，不参与“整条精确替换”；否则模型生成的坏译名
+        # 会绕过 protect_proper 直接写进术语表。
+        self.session_only_keys = set()
         self.session_stats = {}
         self.session_requests = 0
         # TM-lite：高重复批次内精确复用；缓存只在本次任务内存里。
@@ -3400,7 +3497,7 @@ class TranslationJob(object):
         if not letters:
             return False
         han = sum(1 for c in letters if "\u4e00" <= c <= "\u9fff")
-        # 0.2 而不是 0.3：`测试Taurus Raging Bull左轮手枪` 这类“中文 + 品牌”
+        # 0.1 而不是 0.3：`测试Taurus Raging Bull左轮手枪` 这类“中文 + 品牌”
         # 已经是译文，0.3 会把品牌名那点拉丁字母算成“不是中文”，又翻一遍。
         return han / len(letters) > 0.1
 
@@ -3568,7 +3665,8 @@ class TranslationJob(object):
         if not text.strip():
             return text
         stripped = text.strip()
-        if not self.force_glossary and stripped in self.glossary:
+        if (not self.force_glossary and stripped in self.glossary
+                and stripped not in self.session_only_keys):
             self.req_count += 1
             return text.replace(stripped, self.glossary[stripped])
         self.req_count += 1
@@ -3962,6 +4060,7 @@ class TranslationJob(object):
         merged.update(translated)
         self.session_keys = set(merged) | set(
             getattr(self, "_session_core_hits", set()))
+        self.session_only_keys = set(merged)
         for src, dst in merged.items():
             self.glossary[src] = dst
         self.gloss = self._new_gloss_index()
@@ -4586,7 +4685,12 @@ class TranslationJob(object):
                     continue
                 if self._looks_like_target(src) or not _has_translatable_text(src):
                     continue
-                if looks_like_code_or_debug(rel, src):
+                if (looks_like_code_or_debug(rel, src)
+                        or looks_like_generated_noise(rel, src)
+                        or looks_like_technical_text(src)
+                        or looks_like_identifier_text(src)):
+                    continue
+                if self.protect_proper and looks_like_proper_text(rel, src):
                     continue
                 tm_values.append(src)
             self._tm_enable_table(tm_values, rel)
@@ -4600,17 +4704,27 @@ class TranslationJob(object):
             if self._looks_like_target(src):
                 continue
             exact = src.strip()
-            if exact in self.glossary:
-                lead = src[:len(src) - len(src.lstrip())]
-                trail = src[len(src.rstrip()):]
-                new_exact = lead + self.glossary[exact] + trail
-                if new_exact != src:
-                    changes[ent.id] = (lang, new_exact)
-                    st["translated"] += 1
-                continue
+            if (exact in self.glossary
+                    and exact not in self.session_only_keys):
+                # 制作名单/音乐/武器短名即使命中了核心词条，也要服从
+                # “保护专名”；否则 credits 里的 Harris 会被改写成中文。
+                if not (self.protect_proper
+                        and looks_like_hard_protected_file(rel)):
+                    lead = src[:len(src) - len(src.lstrip())]
+                    trail = src[len(src.rstrip()):]
+                    new_exact = lead + self.glossary[exact] + trail
+                    if new_exact != src:
+                        changes[ent.id] = (lang, new_exact)
+                        st["translated"] += 1
+                    continue
             if not _has_translatable_text(src):
                 continue
             if looks_like_code_or_debug(rel, src):
+                st["skipped"] += 1
+                continue
+            if (looks_like_generated_noise(rel, src)
+                    or looks_like_technical_text(src)
+                    or looks_like_identifier_text(src)):
                 st["skipped"] += 1
                 continue
             if self.only_referenced and ent.id not in self._ref_counts:
@@ -5187,11 +5301,17 @@ class TranslationJob(object):
             if self.empty_files <= 20:
                 self.detail("  %s 未提取到可译文本（%s 模式的提取规则见上游）"
                             % (os.path.basename(full), self.mode))
+        prewrapped = set()
         if self.mode in ("scriptE", "scriptL"):
             # 上游提取器不认识上下文；这里只保留显示类调用/文本变量赋值，
             # 跳过 log、string_find/string_gsub、比较运算。见 script_literal_allowed。
+            # 上游还会漏掉 set_level_changer_invitation / set_description /
+            # AddItem(game.translate_string(...))，这里按显示调用补回。
+            extra = extra_script_display_literals(whole)
+            prewrapped = script_translate_literal_args(whole)
+            cands = list(dict.fromkeys(list(cands) + sorted(extra)))
             cands = [c for c in cands
-                     if script_literal_allowed_in_file(whole, c)]
+                     if c in extra or script_literal_allowed_in_file(whole, c)]
         if self._cancelled():
             return None
         rep = {}
@@ -5245,8 +5365,14 @@ class TranslationJob(object):
                 extract[key] = transed
                 if self.mode == "scriptE":
                     # 脚本里裸 ID 是未定义全局变量（nil）；补丁统一用
-                    # game.translate_string("id")。这里必须包起来。
-                    rep[cand] = 'game.translate_string("%s")' % key
+                    # game.translate_string("id")。已经在 translate_string
+                    # 里的字面串只换 ID，不能再套一层。
+                    if cand in prewrapped:
+                        # 外层已有 game.translate_string(...)，只把引号内
+                        # 的字面串换成带引号的新 ID，不能退化成裸变量。
+                        rep[cand] = '"%s"' % key
+                    else:
+                        rep[cand] = 'game.translate_string("%s")' % key
                 else:
                     rep[cand] = key
             else:

@@ -4,7 +4,7 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.1（2026-10-30）**：标准术语库 v2（canon/names/technical +
+**当前版本 1.9.4（2026-10-31）**：标准术语库 v2（canon/names/technical +
 会话词表）、TM-lite 高重复精确复用；1000 条 A/B 术语采纳率 96.8% vs 35.7%；复杂文本表 800 条 +
 大文本表 200 条回归 0 漏译；移除 HY-MT1.5 旧模型档。完整变更见下文。
 
@@ -49,29 +49,45 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.1.zip` | 可直接分发的插件包 |
-| `tests/` | 255 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.9.4.zip` | 可直接分发的插件包 |
+| `tests/` | 269 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.1`
+- 插件版本：`ai_translate 1.9.4`
 - 当前 zip SHA-256：
-  `1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40`
+  `7a3c9040793a1703cc0185ce5bfd50ffc071b9878bb8d0c86c36cbcc0cda3020`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
-- 术语规模：`glossary_builtin.json` 8855 条 / `stalker_termbase.json` 8855 条；
-  canon 1377 / names 3068 / technical 18 / reference 148
+- 术语规模：`glossary_builtin.json` 8850 条 / `stalker_termbase.json` 8850 条；
+  canon 1375 / names 3067 / technical 18 / reference 148
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.1.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.4.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.1 变更摘要
+## 1.6.0 – 1.9.4 变更摘要
 
+- **1.9.4**：俄文词条英文映射审计 —— 4,821 条俄文键逐条对照
+  raw_pairs 英文候选：3,523 一致、61 译名冲突、135 有英文候选未入库、1,102 无候选；
+  修正 Волкодав/Глухарь/Гребень/Кастет、风衣/水壶/U盘/手提箱等 20 余条；
+  清理 `Lake→小飞机`、`Level→地点`、`the Discrete→太平洋`、`Hammer→悍马`
+  等错误英文键；术语库 8850 条（canon 1375 / names 3067）。
+- **1.9.3**：英文物品/武器专项审计 —— 474 条拉丁键完成分类，清理
+  `Vintorez→螺纹切削`、`Metal Key→金属扳手`、`Card→电路板`、
+  `Army uniform→军用防弹背心` 等错配；修正妈妈的项链/黑石碎片/博罗夫军大衣；
+  补录 `Browning High-Power→勃朗宁大威力手枪`、`Circuit board`、
+  `Army body armor`、`Anomalous stabilizer`；术语库 8853 条 / canon 1375。
+- **1.9.2**：修正全量补漏时的误翻 —— 会话词条只做提示、不再整条硬替换；
+  物品/武器跳过纯拉丁型号名；口径/弹药/`.44 Magnum`/`M995 AP` 加技术串保护；
+  文本表补标识符过滤；跳过 `___scriptE__`/`___cfgxml__` 的调试串；
+  credits/ogg/enc_weapons 的文件级专名保护生效；补提取
+  `set_level_changer_invitation`/`set_description`/`AddItem(game.translate_string(...))`
+  等脚本显示调用；清空会话词表缓存。
 - **1.9.1**：移除 **HY-MT1.5-1.8B** 旧模型档（旧版对提示词/术语约束的指令遵循较弱，
   容易把术语提示和系统规则当成可选建议）。内置模型收敛为 7B 与 Hy-MT2 1.8B 两档，
   自选 GGUF 仍保留；旧配置里的 `mt15` 自动迁移到 `mt2`，无独显/低显存也推荐
@@ -169,7 +185,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.1.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 255 项回归测试
+# 269 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性

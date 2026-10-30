@@ -121,3 +121,18 @@ build_glossary -> build_termbase -> build_multisource_terms --apply
 
 `ANTHOLOGY 参考` 不在 `_HARD_TERM_CATEGORIES` 中，只做精确/软提示，
 不会跨 MOD 硬替换。
+
+## 英文物品/武器审计（1.9.3）
+
+- `english_item_audit.csv`：474 条拉丁物品/武器键的逐条决策
+  （源文 / 原译 / 保留英文或译成中文 / 建议译名 / 置信度）；
+- `english_item_audit.md`：高置信修正、坏英文键与补录清单；
+- 数据修正由 `upgrade_termbase_v2.py` 的 `EN_FIXES` / `EN_REMOVALS` /
+  `EN_ADDITIONS` 幂等应用，重建术语库后不会回退。
+
+## 俄文词条英文映射审计（1.9.4）
+
+- `ru_en_mapping_audit.csv`：4,821 条俄文键逐条对照 raw_pairs 英文候选，
+  标注 `一致 / 译名冲突 / 英语未入库 / 无英语候选` 与优先级；
+- `ru_en_mapping_audit.md`：统计、已修正项与仍需人工确认的 2 条物品冲突；
+- 数据修正由 `upgrade_termbase_v2.py` 的 `RU_EN_FIXES` 幂等应用。

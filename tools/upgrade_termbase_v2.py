@@ -63,6 +63,78 @@ REMOVALS = {
     ("人物与军衔", "Короче"),
 }
 
+# 英文物品/武器专项审计的高置信修正。清掉把俄文“Плата/Плащ/Винторез”
+# 错误映射成英文后的坏键；保留俄文正确条目，并补正确的英文别名。
+EN_FIXES = {
+    ("物品·武器·装备·神器", "Metal Key"): "金属钥匙",
+    ("物品·武器·装备·神器", "Металлический ключ"): "金属钥匙",
+    ("物品·武器·装备·神器", "Borov's trench coat"): "博罗夫的军大衣",
+    ("物品·武器·装备·神器", "Плащ Борова"): "博罗夫的军大衣",
+    ("物品·武器·装备·神器", "Leather trench coat"): "皮制风衣",
+    ("物品·武器·装备·神器", "Black bandit trench coat"): "黑色强盗风衣",
+    ("物品·武器·装备·神器", "Brown bandit trench coat"): "棕色强盗风衣",
+    ("物品·武器·装备·神器", "Psychiatrist's trench coat"): "精神科医师风衣",
+    ("物品·武器·装备·神器", "Mama's Beads"): "妈妈的项链",
+    ("物品·武器·装备·神器", "Мамины бусы"): "妈妈的项链",
+    ("物品·武器·装备·神器", "Monolith Shard"): "黑石碎片",
+    ("物品·武器·装备·神器", "Осколок Монолита"): "黑石碎片",
+    ("物品·武器·装备·神器", "Sviblov's case"): "斯维布洛夫的手提箱",
+    ("物品·武器·装备·神器", "Petrenko's Flask"): "彼得连科的水壶",
+    ("物品·武器·装备·神器", "Unknown flash drive"): "未知U盘",
+    ("物品·武器·装备·神器", "M50Z gas mask"): "M50Z防毒面具",
+    ("物品·武器·装备·神器", "Planchette"): "乩板",
+    ("物品·武器·装备·神器", "Планшетка"): "乩板",
+    ("物品·武器·装备·神器", "Teleport Deactivator"): "传送器干扰装置",
+    ("人物与军衔", "the Knuckle-duster"): "指虎",
+    ("百科与术语", "psychiatrists trench coat"): "精神科医师风衣",
+    ("百科与术语", "borovs trench coat"): "博罗夫的军大衣",
+    ("人物与军衔", "Elsa Sakharova"): "艾尔莎·萨哈罗娃",
+    ("人物与军衔", "ELSA SAKHAROVA"): "艾尔莎·萨哈罗娃",
+}
+RU_EN_FIXES = {
+    ("人物与军衔", "Волкодав"): "“沃夫”",
+    ("人物与军衔", "Глухарь"): "格卢哈里",
+    ("人物与军衔", "Гребень"): "格列边",
+    ("人物与军衔", "Кастет"): "指虎",
+    ("物品·武器·装备·神器", "Коричневый бандитский плащ"): "棕色强盗风衣",
+    ("物品·武器·装备·神器", "Чёрный бандитский плащ"): "黑色强盗风衣",
+    ("物品·武器·装备·神器", "Плащ психиатра"): "精神科医师风衣",
+    ("物品·武器·装备·神器", "Кожанный плащ"): "皮制风衣",
+    ("物品·武器·装备·神器", "Именная фляжка Петренко"): "彼得连科的水壶",
+    ("物品·武器·装备·神器", "Неизвестная флеш-карта"): "未知U盘",
+    ("物品·武器·装备·神器", "Курьерский спецкейс"): "斯维布洛夫的手提箱",
+    ("物品·武器·装备·神器", "Противогаз M50з"): "M50Z防毒面具",
+    ("物品·武器·装备·神器", "Деактиватор телепорта"): "传送器干扰装置",
+    ("任务", "Летающий остров"): "飞行岛",
+    ("任务", "Телепортёр"): "传送器",
+    ("任务", "Восточная часть Припяти"): "普里皮亚季东区",
+    ("任务", "Выполнено квестов"): "已完成任务",
+    ("任务", "Убито мутантов"): "击杀变异体",
+    ("百科与术语", "Осторожнее"): "小心点",
+    ("百科与术语", "Тушканчики"): "变异鼠",
+    ("百科与术语", "Броня"): "护甲",
+    ("百科与术语", "ОПЦИИ"): "选项",
+}
+EN_REMOVALS = {
+    ("物品·武器·装备·神器", "Vintorez"),
+    ("物品·武器·装备·神器", "Винторез"),
+    ("物品·武器·装备·神器", "Card"),
+    ("物品·武器·装备·神器", "Army uniform"),
+    ("物品·武器·装备·神器", "Rubick's Cube"),
+    ("物品·武器·装备·神器", "Anomlaous stabilizer"),
+    ("百科与术语", "Lake"),
+    ("百科与术语", "Level"),
+    ("人物与军衔", "the Discrete"),
+    ("人物与军衔", "Hammer"),
+}
+EN_ADDITIONS = {
+    ("物品·武器·装备·神器", "Browning High-Power"): "勃朗宁大威力手枪",
+    ("物品·武器·装备·神器", "Circuit board"): "电路板",
+    ("物品·武器·装备·神器", "Army body armor"): "军用防弹背心",
+    ("物品·武器·装备·神器", "Anomalous stabilizer"): "异常稳定器",
+    ("人物与军衔", "Hummer"): "悍马",
+}
+
 CANON_CATS = ["阵营与组织", "地点与区域", "变异生物",
               "物品·武器·装备·神器"]
 NAME_CATS = ["人物与军衔"]
@@ -102,6 +174,8 @@ def main():
         raise SystemExit("术语库格式不是对象")
 
     fixed = 0
+    added = 0
+    en_added = 0
     for (cat, key), want in FIXES.items():
         table = data.get(cat)
         if isinstance(table, dict) and key in table and table[key] != want:
@@ -113,9 +187,28 @@ def main():
         if isinstance(table, dict) and key in table:
             del table[key]
             removed += 1
+    for (cat, key), want in EN_FIXES.items():
+        table = data.get(cat)
+        if isinstance(table, dict) and key in table and table[key] != want:
+            table[key] = want
+            fixed += 1
+    for (cat, key), want in RU_EN_FIXES.items():
+        table = data.get(cat)
+        if isinstance(table, dict) and key in table and table[key] != want:
+            table[key] = want
+            fixed += 1
+    for cat, key in EN_REMOVALS:
+        table = data.get(cat)
+        if isinstance(table, dict) and key in table:
+            del table[key]
+            removed += 1
+    for (cat, key), want in EN_ADDITIONS.items():
+        table = data.get(cat)
+        if isinstance(table, dict) and key not in table:
+            table[key] = want
+            en_added += 1
 
     technical = read_technical_exact()
-    added = 0
     tech_table = data.get(TECH_CAT)
     if not isinstance(tech_table, dict):
         tech_table = {}
@@ -188,8 +281,8 @@ def main():
                   sort_keys=True)
     os.replace(tmp, BUILTIN)
 
-    print("v2 升级完成：总 %d 条，技术词新增 %d，修正 %d，移除 %d，变体 %d"
-          % (total, added, fixed, removed, len(variants)))
+    print("v2 升级完成：总 %d 条，技术词新增 %d，英文补录 %d，修正 %d，移除 %d，变体 %d"
+          % (total, added, en_added, fixed, removed, len(variants)))
     print("canon %d / names %d / technical %d / reference %d"
           % (sum(len(cats.get(c, {})) for c in CANON_CATS),
              sum(len(cats.get(c, {})) for c in NAME_CATS),

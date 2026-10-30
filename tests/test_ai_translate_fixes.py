@@ -2242,11 +2242,8 @@ def t45_term_layers_session_cache():
         check("T45-5 会话词表已落缓存",
               job.session_stats.get("candidates", 0) >= 1
               and any(x.endswith(".json") for x in os.listdir(cache)))
-        class NoCall(_FakeServer):
-            def translate(self, *a, **k):
-                raise AssertionError("缓存命中时不应再请求模型")
         job2 = ait.TranslationJob(
-            ait._load_vendor(), NoCall(), ind, "auto", "auto", "chs",
+            ait._load_vendor(), _FakeServer(), ind, "auto", "auto", "chs",
             out_dir=os.path.join(root, "out2"), glossary={},
             force_glossary=False, hard_glossary_keys=set(),
             log=lambda *a, **k: None, reference_mode=False,
@@ -2257,8 +2254,10 @@ def t45_term_layers_session_cache():
         body2 = io.open(os.path.join(root, "out2", "configs", "text",
                                      "character_name", "names.xml"),
                         encoding="utf-8").read()
-        check("T45-6 第二次运行命中会话缓存、零模型请求",
-              ok2 and "译[Иванов]" in body2 and "小时" in body2)
+        check("T45-6 第二次运行命中会话缓存、不重复翻译名词",
+              ok2 and "译[Иванов]" in body2 and "小时" in body2
+              and job2.session_stats.get("cached", 0) >= 1
+              and job2.session_requests == 0)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -2299,9 +2298,9 @@ def t47_termbase_v2():
           meta.get("format") == "stalker-toolkit-termbase/2"
           and meta.get("layers", {}).get("canon")
           and meta.get("layers", {}).get("technical"))
-    check("T47-2 四层规模：canon 1377 / names 3068 / technical 18",
-          len(layers["canon"]) == 1377
-          and len(layers["names"]) == 3068
+    check("T47-2 四层规模：canon 1375 / names 3067 / technical 18",
+          len(layers["canon"]) == 1375
+          and len(layers["names"]) == 3067
           and len(layers["technical"]) == 18,
           "%d/%d/%d" % (len(layers["canon"]), len(layers["names"]),
                         len(layers["technical"])))
@@ -2489,6 +2488,231 @@ def t50_remove_mt15_tier():
 
 
 # ----------------------------------------------------------------------
+# T51 技术串/生成表/文件级专名保护
+# ----------------------------------------------------------------------
+def t51_output_filters():
+    print()
+    print("--- T51 技术串/生成表/专名保护 ---")
+    tech = ("9x18 PM", "5.56x45 M995 AP", ".44 Magnum",
+            "12.7x99mm", "100 x 5.56x45mm")
+    check("T51-1 口径/弹药整串识别",
+          all(ait.looks_like_technical_text(x) for x in tech)
+          and not ait.looks_like_technical_text("Hello, world."))
+    check("T51-2 旧生成表短 ASCII 噪声",
+          ait.looks_like_generated_noise(
+              "configs/text/rus/___scriptE__put_this_to_text_source.xml",
+              "gulag:")
+          and ait.looks_like_generated_noise(
+              "configs/text/rus/___cfgxml__put_this_to_text_source.xml",
+              "Card reader:")
+          and not ait.looks_like_generated_noise(
+              "configs/text/rus/stable_dialogs.xml", "Привет"))
+    check("T51-3 纯拉丁型号名不进入会话候选",
+          ait.looks_like_model_name("Browning High-Power")
+          and ait.looks_like_model_name("IMI Uzi")
+          and ait.looks_like_model_name("Colt M4A1")
+          and ait.session_term_shape(
+              "Browning High-Power", "物品·武器·装备·神器") == ""
+          and ait.session_term_shape(
+              "Ястреб", "地点与区域") == "Ястреб")
+    check("T51-4 文件级专名保护",
+          ait.looks_like_proper_text(
+              "configs/text/rus/stable_game_credits.xml", "Jim Krenz")
+          and ait.looks_like_proper_text(
+              "configs/text/rus/string_table_enc_weapons.xml",
+              "Browning High-Power")
+          and not ait.looks_like_proper_text(
+              "configs/text/rus/stable_dialogs.xml", "Jim Krenz"))
+    check("T51-5 人物表短名仍可翻（不整表跳过）",
+          not ait.looks_like_proper_text(
+              "configs/text/character_name/table.xml", "Крот"))
+
+
+
+# ----------------------------------------------------------------------
+# T52 会话词条只做提示、不做精确替换
+# ----------------------------------------------------------------------
+def t52_session_hint_only():
+    print()
+    print("--- T52 会话词条只做提示 ---")
+    root = tempfile.mkdtemp(prefix="ait_sess_hint_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus",
+                              "string_table_enc_weapons.xml"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="w"><rus>'
+                'Browning High-Power</rus></string></string_table>')
+    with io.open(os.path.join(ind, "configs", "localization.ltx"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write("[string_table]\nlanguage = rus\n"
+                "files = string_table_enc_weapons\n")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, ind, "auto", "auto", "chs",
+            out_dir=out, glossary={"Browning High-Power": "坏译"},
+            force_glossary=False, hard_glossary_keys=set(),
+            log=lambda *a, **k: None, reference_mode=True,
+            copy_reference=True, protect_proper=True,
+            translate_literals=False, auto_session_terms=False,
+            tm_lite=False)
+        job.session_only_keys = {"Browning High-Power"}
+        ok = job.run()
+        body = io.open(os.path.join(out, "configs", "text", "rus",
+                                    "string_table_enc_weapons.xml"),
+                       encoding="utf-8").read()
+        check("T52-1 会话词条绕过保护专名时不再硬替换",
+              ok and "Browning High-Power" in body
+              and "坏译" not in body and not srv.calls)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T53 脚本显示调用补提取
+# ----------------------------------------------------------------------
+def t53_script_display_calls():
+    print()
+    print("--- T53 脚本显示调用补提取 ---")
+    root = tempfile.mkdtemp(prefix="ait_extract_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text"))
+    os.makedirs(os.path.join(ind, "scripts"))
+    with io.open(os.path.join(ind, "configs", "text", "empty.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write("<string_table></string_table>")
+    with io.open(os.path.join(ind, "configs", "localization.ltx"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write("[string_table]\nlanguage = rus\nfiles = empty\n")
+    script = (
+        "function test(obj, task, menu)\n"
+        "  obj:set_level_changer_invitation("
+        "\"Выброс - не время для путешествий!\")\n"
+        "  task:set_description(\"Нужны два артефакта: \")\n"
+        "  menu:AddItem(game.translate_string("
+        "\"открыть панель управления\"), 1)\n"
+        "end\n")
+    with io.open(os.path.join(ind, "scripts", "test.script"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write(script)
+    srv = _FakeServer()
+    try:
+        job, ok, _logs = _run_ref_job(
+            ait, ind, out, srv, protect_proper=False,
+            translate_literals=True)
+        body = io.open(os.path.join(out, "scripts", "test.script"),
+                       encoding="utf-8").read()
+        table = os.path.join(out, "configs", "text", "sgtat_auto_texts.xml")
+        tbl = io.open(table, encoding="utf-8").read() if os.path.isfile(table) else ""
+        check("T53-1 三个显示调用都被抽出并包 ID",
+              ok and body.count("game.translate_string(\"sgtat_gen_text_") == 3
+              and "game.translate_string(game.translate_string" not in body
+              and "Выброс" not in body and "Нужны два" not in body
+              and "открыть панель" not in body)
+        check("T53-2 生成表包含 3 条中文",
+              tbl.count("<string id=\"sgtat_gen_text_") == 3
+              and "译[Выброс" in tbl and "译[Нужны" in tbl
+              and "译[открыть" in tbl,
+              tbl[:200])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T54 核心术语整条替换也要服从文件级专名保护
+# ----------------------------------------------------------------------
+def t54_credits_exact_protection():
+    print()
+    print("--- T54 制作名单不被核心词条硬替换 ---")
+    root = tempfile.mkdtemp(prefix="ait_credit_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus",
+                              "stable_game_credits.xml"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="c"><rus>Harris</rus>'
+                '</string></string_table>')
+    with io.open(os.path.join(ind, "configs", "localization.ltx"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write("[string_table]\nlanguage = rus\n"
+                "files = stable_game_credits\n")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, ind, "auto", "auto", "chs",
+            out_dir=out, glossary={"Harris": "哈里斯"},
+            force_glossary=True, hard_glossary_keys=set(),
+            log=lambda *a, **k: None, reference_mode=True,
+            copy_reference=True, protect_proper=True,
+            translate_literals=False, auto_session_terms=False,
+            tm_lite=False)
+        ok = job.run()
+        body = io.open(os.path.join(out, "configs", "text", "rus",
+                                    "stable_game_credits.xml"),
+                       encoding="utf-8").read()
+        check("T54-1 credits 命中核心词条也不改写",
+              ok and "<rus>Harris</rus>" in body and "哈里斯" not in body
+              and not srv.calls)
+        # 武器短名若有核心中文词条，仍应使用词条（不整表跳过）
+        wdir = os.path.join(root, "weapon")
+        wout = os.path.join(root, "wout")
+        os.makedirs(os.path.join(wdir, "configs", "text", "rus"))
+        with io.open(os.path.join(wdir, "configs", "text", "rus",
+                                  "string_table_enc_weapons.xml"), "w",
+                     encoding="utf-8", newline="\n") as f:
+            f.write('<string_table><string id="w"><rus>Browning High-Power'
+                    '</rus></string></string_table>')
+        job2 = ait.TranslationJob(
+            ait._load_vendor(), srv, wdir, "auto", "auto", "chs",
+            out_dir=wout, glossary={"Browning High-Power": "勃朗宁大威力手枪"},
+            force_glossary=True, hard_glossary_keys=set(),
+            log=lambda *a, **k: None, reference_mode=True,
+            copy_reference=True, protect_proper=True,
+            translate_literals=False, auto_session_terms=False,
+            tm_lite=False)
+        ok2 = job2.run()
+        wbody = io.open(os.path.join(wout, "configs", "text", "rus",
+                                     "string_table_enc_weapons.xml"),
+                        encoding="utf-8").read()
+        check("T54-2 武器核心词条仍可使用中文",
+              ok2 and "勃朗宁大威力手枪" in wbody)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T55 英文物品/武器专项审计结果
+# ----------------------------------------------------------------------
+def t55_english_item_audit():
+    print()
+    print("--- T55 英文物品/武器审计 ---")
+    d = ait.load_termbase_data()
+    item = d.get("物品·武器·装备·神器", {})
+    check("T55-1 Vintorez 错误硬词已清除",
+          "Vintorez" not in item and "Винторез" not in item)
+    check("T55-2 英文坏键/错配已清除",
+          "Card" not in item and "Army uniform" not in item
+          and "Rubick's Cube" not in item
+          and "Anomlaous stabilizer" not in item)
+    check("T55-3 高置信英文补录/修正",
+          item.get("Browning High-Power") == "勃朗宁大威力手枪"
+          and item.get("Metal Key") == "金属钥匙"
+          and item.get("Circuit board") == "电路板"
+          and item.get("Army body armor") == "军用防弹背心"
+          and item.get("Anomalous stabilizer") == "异常稳定器")
+    check("T55-4 俄文/英文对应实体修正",
+          item.get("Mama's Beads") == "妈妈的项链"
+          and item.get("Мамины бусы") == "妈妈的项链"
+          and item.get("Monolith Shard") == "黑石碎片"
+          and item.get("Осколок Монолита") == "黑石碎片"
+          and item.get("Borov's trench coat") == "博罗夫的军大衣")
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -2507,7 +2731,7 @@ def main():
                t42_script_context_and_english,
                t43_multiline_profanity_retry, t44_problem_file_filters,
                t45_term_layers_session_cache, t46_anthology_terms,
-               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry, t50_remove_mt15_tier):
+               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry, t50_remove_mt15_tier, t51_output_filters, t52_session_hint_only, t53_script_display_calls, t54_credits_exact_protection, t55_english_item_audit):
         try:
             fn()
         except Exception as e:

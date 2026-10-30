@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.9.1
+插件版本：ai_translate 1.9.4
 
 
 一、怎么装（30 秒）
@@ -29,14 +29,14 @@ AI 离线翻译插件 · 分享包说明
 工具集 exe（1.1.0 build_60，历史发布物）：
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
-本插件 zip（ai_translate_plugin_v1.9.1.zip）：
-    1564366f80ed6188ccc1b531f8f709d5d43ae5cd20c8899d7e7ba36cd8c42f40
+本插件 zip（ai_translate_plugin_v1.9.4.zip）：
+    7a3c9040793a1703cc0185ce5bfd50ffc071b9878bb8d0c86c36cbcc0cda3020
 
 PowerShell 校验：
-    Get-FileHash .\ai_translate_plugin_v1.9.1.zip -Algorithm SHA256
+    Get-FileHash .\ai_translate_plugin_v1.9.4.zip -Algorithm SHA256
 
 说明：exe 哈希取自清理前生成的发布清单；如果你手上的 exe 不是同一构建，
-请以那次发布清单为准。插件 zip 哈希对应本 1.9.1 分享包。
+请以那次发布清单为准。插件 zip 哈希对应本 1.9.4 分享包。
 插件运行时下载的 llama.cpp 运行库与模型，也会在下载后按发布方官方
 SHA-256 校验（llama.cpp b11612 GitHub Release digest / HuggingFace LFS
 oid）；不一致会删除该文件并自动换源。
@@ -49,7 +49,7 @@ oid）；不一致会删除该文件并自动换源。
     ai_translate.py                      插件本体，纯 Python 标准库
     ai_translate_assets\xray_pkg.zip     解析 X-Ray 文本 XML/LTX/脚本所必需
     ai_translate_assets\stalker_termbase.json   术语基表（分类格式，导入用）
-    ai_translate_assets\glossary_builtin.json   随包术语库（8855 条，只读）
+    ai_translate_assets\glossary_builtin.json   随包术语库（8850 条，只读）
     ai_translate_assets\THIRD_PARTY_NOTICES.txt 第三方来源与许可状态（必读）
                                                   用户自己的增删改记在 glossary_user.json（不随包）
 
@@ -64,8 +64,8 @@ oid）；不一致会删除该文件并自动换源。
 的硬件与网络重新选档和测速选源，不会继承别人的设置。
 本包内不含任何绝对路径、用户名或本机设置项，已由自动化测试逐项核对。
 
-`ai_translate.py` 当前 6918 行（开发注释已大幅精简，保留必要的安全说明；
-函数与类文档字符串保留）。本版新增的官方 SHA-256 校验已通过 255 项回归测试
+`ai_translate.py` 当前 7044 行（开发注释已大幅精简，保留必要的安全说明；
+函数与类文档字符串保留）。本版新增的官方 SHA-256 校验已通过 269 项回归测试
 和定向篡改测试（正确哈希通过、错误哈希删除并拒绝）。
 
 
@@ -109,12 +109,23 @@ oid）；不一致会删除该文件并自动换源。
 看到告警请换模型，不要硬跑（否则每条文本都会超时）。
 
 
-四点五、1.6.0 – 1.9.1 修了什么（与你直接相关）
+四点五、1.6.0 – 1.9.4 修了什么（与你直接相关）
 ----------------------------------------
+* （1.9.4）俄文词条英文映射审计：4,821 条俄文键对照英文候选，修正
+  Волкодав/Глухарь/Гребень/Кастет、风衣/水壶/U盘/手提箱等 20 余条；
+  删除 Lake/Level/the Discrete/Hammer 等错误英文键；术语库 8850 条。
+* （1.9.3）英文物品/武器专项审计：清理 Vintorez→螺纹切削、Metal Key→金属扳手、
+  Card→电路板、Army uniform→军用防弹背心等错配；修正妈妈的项链/黑石碎片/
+  博罗夫军大衣；补录 Browning High-Power、Circuit board、Army body armor、
+  Anomalous stabilizer；术语库 8853 条（canon 1375）。
+* （1.9.2）全量补漏修正：会话词条只做提示，不再硬替换；武器/物品跳过纯拉丁型号；
+  口径/弹药/型号加技术串保护；生成表调试串跳过；credits/ogg/enc_weapons 文件级
+  专名保护生效；脚本显示调用（set_level_changer_invitation、set_description、
+  AddItem(game.translate_string(...))）补提取；会话缓存已清理。
 * （1.9.1）移除 HY-MT1.5-1.8B 旧档：它对系统提示词与术语约束的指令遵循较弱，
   旧版容易把术语提示当建议。内置模型现为精雕 7B / 精准 1.8B 两档，
   自选 GGUF 保留；旧配置的 mt15 自动迁移到 mt2，无独显也推荐 1.8B。
-* （1.9.0）标准术语库 v2：canon（1377 硬词）/ names（3068 人物软层）/
+* （1.9.0）标准术语库 v2：canon（1375 硬词）/ names（3067 人物软层）/
   technical（18 条整条精确）/ reference（148 条参考软词）。运行时新增
   ё/е 变体归一、拼写变体映射；人物名和小写拉丁专名改首字母大小写敏感，
   正文里的 doctor/bar/crystal 不再被硬套专名。新增 1000 条开/关术语 A/B、
@@ -181,7 +192,7 @@ oid）；不一致会删除该文件并自动换源。
 
 五、术语库（已随包附带）
 ------------------------
-包内已附带两份术语数据（8855 条），都可用界面上的「导入JSON」加载：
+包内已附带两份术语数据（8850 条），都可用界面上的「导入JSON」加载：
 
     stalker_termbase.json   分类格式：{"分类名": {"原文": "译文"}}
     glossary_builtin.json   扁平格式：{"原文": "译文"}（上面那份展开后的结果）
@@ -199,8 +210,8 @@ oid）；不一致会删除该文件并自动换源。
 
 v2 分层说明（随包库，不需要你手工维护）：
 
-    canon       阵营/地点/变异体/物品 1377 条，强制+提示
-    names       人物与军衔 3068 条，只做整条精确/首字母大写软提示
+    canon       阵营/地点/变异体/物品 1375 条，强制+提示
+    names       人物与军衔 3067 条，只做整条精确/首字母大写软提示
     technical   单位/缩写 18 条，只做整条精确
     reference   ANTHOLOGY 参考 148 条，只做软参考
 
