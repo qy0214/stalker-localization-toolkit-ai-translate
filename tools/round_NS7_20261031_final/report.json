@@ -1,0 +1,204 @@
+{
+ "mod": "NS7",
+ "ok": true,
+ "elapsed": 349.4,
+ "files": 30,
+ "source_entries": 1200,
+ "output_entries": 1200,
+ "translated": 1195,
+ "residual_cyr": 0,
+ "no_cjk": 24,
+ "placeholder_mismatch": 3,
+ "hard_terms": 263,
+ "hard_hits": 228,
+ "hard_adoption": 86.69201520912547,
+ "batch": {
+  "batches": 90,
+  "lines": 280,
+  "failed": 0
+ },
+ "requests": 1034,
+ "manifest": [
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_yantar.xml",
+   "name": "complex_stable_dialogs_yantar_0",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\news\\news_places.xml",
+   "name": "complex_news_places_1",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\items\\string_table_items.xml",
+   "name": "complex_string_table_items_2",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\other\\sak_strings.xml",
+   "name": "complex_sak_strings_3",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_agroprom.xml",
+   "name": "complex_stable_dialogs_agroprom_4",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\ui\\ui_sss.xml",
+   "name": "complex_ui_sss_5",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_oksana579.xml",
+   "name": "complex_stable_dialogs_oksana579_6",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\tasks\\string_table_tasks_natasha_story.xml",
+   "name": "complex_string_table_tasks_natasha_story_7",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_laucer.xml",
+   "name": "complex_stable_dialogs_laucer_8",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\ui\\string_table_ui.xml",
+   "name": "complex_string_table_ui_9",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\other\\stable_stories.xml",
+   "name": "complex_stable_stories_10",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\other\\string_table_oksana579.xml",
+   "name": "complex_string_table_oksana579_11",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_nemrude.xml",
+   "name": "complex_stable_dialogs_nemrude_12",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\other\\sak_strings_treasure.xml",
+   "name": "complex_sak_strings_treasure_13",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\tasks\\string_table_tasks.xml",
+   "name": "complex_string_table_tasks_14",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_ray.xml",
+   "name": "complex_stable_dialogs_ray_15",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\tasks\\string_table_tasks_arhara.xml",
+   "name": "complex_string_table_tasks_arhara_16",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\ui\\ui_z_custom.xml",
+   "name": "complex_ui_z_custom_17",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_natasha_companion.xml",
+   "name": "complex_stable_dialogs_natasha_companion_18",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\tips\\string_table_tips_bar-rostok.xml",
+   "name": "complex_string_table_tips_bar-rostok_19",
+   "entries": 30
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\news\\news_prefix.xml",
+   "name": "large_news_prefix_20",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\other\\sak_strings.xml",
+   "name": "large_sak_strings_21",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_oksana579.xml",
+   "name": "large_stable_dialogs_oksana579_22",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\tips\\string_table_tips.xml",
+   "name": "large_string_table_tips_23",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\encyclopedia\\string_table_enc_weapons.xml",
+   "name": "large_string_table_enc_weapons_24",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_new.xml",
+   "name": "large_stable_dialogs_new_25",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\news\\news.xml",
+   "name": "large_news_26",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_nemrude.xml",
+   "name": "large_stable_dialogs_nemrude_27",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\character_name\\stable_generate_snames.xml",
+   "name": "large_stable_generate_snames_28",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\NS7\\gamedata\\configs\\text\\dialogs\\stable_dialogs_arhara.xml",
+   "name": "large_stable_dialogs_arhara_29",
+   "entries": 60
+  }
+ ],
+ "samples": []
+}

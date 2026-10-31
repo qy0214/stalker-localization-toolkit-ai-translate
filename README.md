@@ -4,9 +4,9 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.4（2026-10-31）**：标准术语库 v2（canon/names/technical +
-会话词表）、TM-lite 高重复精确复用；1000 条 A/B 术语采纳率 96.8% vs 35.7%；复杂文本表 800 条 +
-大文本表 200 条回归 0 漏译；移除 HY-MT1.5 旧模型档。完整变更见下文。
+**当前版本 1.9.10（2026-10-31）**：英文语义定点修复 —— `controller→脑波怪`、
+`Freedom faction→“自由团”` 在英文源里按词形修正；英文别名精准化与
+场景批处理/上下文/风格后处理保持不变。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -49,39 +49,71 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.4.zip` | 可直接分发的插件包 |
-| `tests/` | 269 项回归测试 + 分享包卫生测试 |
+| `dist/ai_translate_plugin_v1.9.10.zip` | 可直接分发的插件包 |
+| `tests/` | 346 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
 | `.github/workflows/ci.yml` | CI：跑两套测试 + 发布清单漂移门禁 |
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.4`
+- 插件版本：`ai_translate 1.9.10`
 - 当前 zip SHA-256：
-  `7a3c9040793a1703cc0185ce5bfd50ffc071b9878bb8d0c86c36cbcc0cda3020`
+  `a25e59463ea8f4e4e551e728949a8c2057e5056cf75f0e74c554b30323a3760f`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
-- 术语规模：`glossary_builtin.json` 8850 条 / `stalker_termbase.json` 8850 条；
-  canon 1375 / names 3067 / technical 18 / reference 148
+- 术语规模：`glossary_builtin.json` 9059 条 / `stalker_termbase.json` 9059 条；
+  canon 1453 / names 3069 / technical 18 / reference 4519（百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.4.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.10.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.4 变更摘要
+## 1.6.0 – 1.9.10 变更摘要
 
+- **1.9.10**：英文源语义定点修复 —— 源文出现 `controller/controllers` 时，
+  把译文“控制器/控制者”改为“脑波怪”；源文出现首字母大写 `Freedom` 或
+  `Freedom faction` 时，把“自由派团体/势力/派别/阵营/组织”改为“自由团”；
+  只在英文源且源文确实出现该词时生效。346 项回归全过。
+- **1.9.9**：英文术语别名精准化 —— 补 12 条英文物品别名（克鲁格洛夫/疯子/
+  俘虏U盘、幸运儿/暴君PDA、博罗夫钥匙、祖母项链等）；`Note/Order/Bread/
+  flash/hide/Soul/Military/Flesh/Rat/crystal` 从 hard 降到 reference；
+  `Duty/Freedom/Garbage` 只认首字母大写；`izomorf→同形体`。OLR 英文
+  hard 采纳 93.0%→98.1%。343 项回归全过。
+- **1.9.8**：场景级翻译优化 —— 连续短对话按 2～4 条批量翻译（保留 [n] 行号），
+  失败自动回退逐条；逐条对话注入前后句场景上下文；对话/标签/百科新闻分提示；
+  中文去翻译腔后处理（并且/因此/此外/多余空格/省略号）；批次含 hard 术语时
+  回退逐条，保护术语。温度 0 vs 0.25 A/B：术语 100%、0 残留，但 0.25 出现
+  一次语种漂移，默认保持 0.1；parallel 2 并发批次实测 1.77×，当前串行 UI 未启用。
+  三轮不同 MOD 随机测试共 2,923 条，残留俄文 0。338 项回归全过。
+- **1.9.7**：引号内多词专名修复 —— `"Броня Долга"`、`"база Свободы"`、
+  `"Рюкзак Долга"` 这类引号包住的多词名称里，阵营词不紧贴引号也能命中；
+  新增“残留源词确定性替换”：译文仍原样保留 `"Автомобилист"`、`"Выверт"`
+  等俄文时直接按词库替换，不调用模型、不改其它文字；`Долговец→纪律团成员`
+  改入人物软层，`Свалка` 只认大写地名，`Телепорт` 只在引号内当专名；
+  hard 词精准化：81 条任务描述/动作短语/长物品名 + 8 条单字普通物品从 canon
+  降到 reference 软提示，canon 1,540→1,451；另对 31 条单字通名加引号/
+  大小写语境限制。332 项回归全过。
+- **1.9.6**：术语库与提示词全面复查 —— 自由团/纪律团/黑石成员补齐与格、属格、工具格等
+  格变；对照 NS7 官方补 `Чистое небо/Последний день/О-Сознание/Выжигатель мозгов/Росток/
+  Гюрза/Москвич` 等高频专名；修正 `Трамплин→跳板`、`Пустышка→空壳`、
+  `Камень удачи→幸运石`、`Яркая пружина→明亮弹簧`、`лечебный берилл→治疗用绿柱石`；
+  reference 软提示层 4,420 条（百科/任务/界面/新闻 4,272 + ANTHOLOGY 148；精确命中才提示，不强制替换）；
+  提示词新增“引号不保留原文”条款，中文译文残留西里尔字母时自动重试一次。
+- **1.9.5**：修正阵营屈折形与引号 —— `Долга/Долгом/Долгу/Долге`、
+  `Монолита/Монолитом`、`Свободой/Свободовцы` 等提升到 hard canon 并区分大小写；
+  引号内回填去掉目标外层引号，修复 `““纪律团””`；术语库 8857 条 / canon 1400。
 - **1.9.4**：俄文词条英文映射审计 —— 4,821 条俄文键逐条对照
   raw_pairs 英文候选：3,523 一致、61 译名冲突、135 有英文候选未入库、1,102 无候选；
   修正 Волкодав/Глухарь/Гребень/Кастет、风衣/水壶/U盘/手提箱等 20 余条；
   清理 `Lake→小飞机`、`Level→地点`、`the Discrete→太平洋`、`Hammer→悍马`
-  等错误英文键；术语库 8850 条（canon 1375 / names 3067）。
+  等错误英文键；术语库 8857 条（canon 1400 / names 3067）。
 - **1.9.3**：英文物品/武器专项审计 —— 474 条拉丁键完成分类，清理
   `Vintorez→螺纹切削`、`Metal Key→金属扳手`、`Card→电路板`、
   `Army uniform→军用防弹背心` 等错配；修正妈妈的项链/黑石碎片/博罗夫军大衣；
   补录 `Browning High-Power→勃朗宁大威力手枪`、`Circuit board`、
-  `Army body armor`、`Anomalous stabilizer`；术语库 8853 条 / canon 1375。
+  `Army body armor`、`Anomalous stabilizer`；术语库 8853 条 / canon 1400。
 - **1.9.2**：修正全量补漏时的误翻 —— 会话词条只做提示、不再整条硬替换；
   物品/武器跳过纯拉丁型号名；口径/弹药/`.44 Magnum`/`M995 AP` 加技术串保护；
   文本表补标识符过滤；跳过 `___scriptE__`/`___cfgxml__` 的调试串；
@@ -185,7 +217,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.4.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 269 项回归测试
+# 346 项回归测试
 python tests/test_ai_translate_fixes.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性

@@ -1,0 +1,204 @@
+{
+ "mod": "OLR-ENG",
+ "ok": true,
+ "elapsed": 303.6,
+ "files": 30,
+ "source_entries": 1200,
+ "output_entries": 1200,
+ "translated": 1143,
+ "residual_cyr": 0,
+ "no_cjk": 59,
+ "placeholder_mismatch": 1,
+ "hard_terms": 460,
+ "hard_hits": 428,
+ "hard_adoption": 93.04347826086956,
+ "batch": {
+  "batches": 62,
+  "lines": 207,
+  "failed": 0
+ },
+ "requests": 1103,
+ "manifest": [
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_enc_equipment.xml",
+   "name": "complex_string_table_enc_equipment_0",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_statistic_caption.xml",
+   "name": "complex_stable_statistic_caption_1",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_agroprom.xml",
+   "name": "complex_stable_dialogs_agroprom_2",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_military.xml",
+   "name": "complex_stable_dialogs_military_3",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\ui_st_mm_mp.xml",
+   "name": "complex_ui_st_mm_mp_4",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_enc_weapons.xml",
+   "name": "complex_string_table_enc_weapons_5",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_tasks_bar.xml",
+   "name": "complex_string_table_tasks_bar_6",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_stories.xml",
+   "name": "complex_stable_stories_7",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\ui_st_mp.xml",
+   "name": "complex_ui_st_mp_8",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_escape.xml",
+   "name": "complex_stable_dialogs_escape_9",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\ui_st_pda.xml",
+   "name": "complex_ui_st_pda_10",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_garbage.xml",
+   "name": "complex_stable_dialogs_garbage_11",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_items.xml",
+   "name": "complex_string_table_items_12",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_task_manager.xml",
+   "name": "complex_stable_task_manager_13",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\ui_st_keybinding.xml",
+   "name": "complex_ui_st_keybinding_14",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_yantar.xml",
+   "name": "complex_stable_dialogs_yantar_15",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_bio_name.xml",
+   "name": "complex_stable_bio_name_16",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_generate_snames.xml",
+   "name": "complex_stable_generate_snames_17",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_treasure_manager.xml",
+   "name": "complex_stable_treasure_manager_18",
+   "entries": 30
+  },
+  {
+   "kind": "complex",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialog_manager.xml",
+   "name": "complex_stable_dialog_manager_19",
+   "entries": 30
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_enc_weapons.xml",
+   "name": "large_string_table_enc_weapons_20",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialog_manager.xml",
+   "name": "large_stable_dialog_manager_21",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_bio_name.xml",
+   "name": "large_stable_bio_name_22",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\string_table_general.xml",
+   "name": "large_string_table_general_23",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_task_manager.xml",
+   "name": "large_stable_task_manager_24",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_treasure_manager.xml",
+   "name": "large_stable_treasure_manager_25",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_military.xml",
+   "name": "large_stable_dialogs_military_26",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_escape.xml",
+   "name": "large_stable_dialogs_escape_27",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_dialogs_bar.xml",
+   "name": "large_stable_dialogs_bar_28",
+   "entries": 60
+  },
+  {
+   "kind": "large",
+   "src": "C:\\game\\STALKER-OLR25\\gamedata\\config\\text\\eng\\stable_generate_snames.xml",
+   "name": "large_stable_generate_snames_29",
+   "entries": 60
+  }
+ ],
+ "samples": []
+}

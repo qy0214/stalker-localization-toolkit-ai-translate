@@ -1,7 +1,7 @@
 # 标准术语库 v2 质量审计
 
 - 生成：`tools/audit_termbase.py`
-- 术语库：`8850` 条；canon `1375`、names `3067`、technical `18`、reference `148`
+- 术语库：`9059` 条；canon `1453`、names `3069`、technical `18`、reference `4519`
 - 严重度：blocking 0 / high 0 / medium 2 / low 2 / ok 16
 
 ## 结论
@@ -24,7 +24,7 @@
 | ok | `sentence_in_canon` | canon 层疑似长句/带句末标点：0 条 |
 | ok | `inflection_conflict` | 同分类屈折形译名冲突：0 组 |
 | medium | `inflection_cross_cat` | 跨分类同词干不同译名（可能是不同概念）：1 组 |
-| low | `risky_latin_canon` | 小写单单词拉丁 canon（运行时仅认大写专名）：30 条 |
+| low | `risky_latin_canon` | 小写单单词拉丁 canon（运行时仅认大写专名）：28 条 |
 | ok | `technical_missing` | 插件 _TECHNICAL_EXACT 未登记进术语库：0 条 |
 | ok | `technical_mismatch` | 技术词译文与插件常量不一致：0 条 |
 | ok | `variant_target` | 变体映射指向不存在的词条：0 条 |
@@ -53,4 +53,4 @@
 
 - 语义误译（同名不同人、同词不同语境）只能靠人工/语境抽查；
 - 带引号的 158 条词条与不带引号的同名词条是不同源串，审计不把它们合并；
-- names 层 3067 条只做整条精确/首字母大写提示，不进入强制替换。
+- names 层 3069 条只做整条精确/首字母大写提示，不进入强制替换。

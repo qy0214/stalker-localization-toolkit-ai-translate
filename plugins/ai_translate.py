@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.4",
+    "version": "1.9.10",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -541,6 +541,9 @@ TRANSLATION_SYS_PROMPT = (
     "10. 反问、讽刺、威胁按说话人的意图译，不要逐字翻转否定："
     "«Ну а на хрен тебе не пойти?» 是「你他妈怎么还不滚？」，"
     "不是「你别去了吧」。\n"
+    "11. 引号不是保留原文的理由：引号内的阵营、组织、地名、物品、人名"
+    "同样要译成中文；只有代码、型号、条目ID、文件路径才保留原文，"
+    "译文里不得残留整词或整段的俄文。\n"
     "\n"
     "口语对照示例（左为生硬译法，右为地道中文；照右边的路子写）：\n"
     "· 「听着，我有件事要告诉你。」→「哎，我有事找你。」\n"
@@ -586,6 +589,9 @@ TRANSLATION_SYS_PROMPT_EN = (
     "10. 反问、讽刺、威胁按说话人的意图译，不要逐字翻转否定："
     "「Why don't you just leave?」是「你他妈怎么还不滚？」，"
     "不是「你为什么不离开」。\n"
+    "11. 引号不是保留原文的理由：引号内的阵营、组织、地名、物品、人名"
+    "同样要译成中文；只有代码、型号、条目ID、文件路径才保留原文，"
+    "译文里不得残留整词或整段的英文或俄文原文。\n"
     "\n"
     "英语口语对照示例（左为生硬译法，右为地道中文；照右边的路子写）：\n"
     "· 「Listen, I've got something to tell you.」→「哎，我有事找你。」\n"
@@ -594,6 +600,24 @@ TRANSLATION_SYS_PROMPT_EN = (
     "· 「Do you understand what's going on?」→「你懂现在发生啥了吗？」\n"
     "· 「Get out of my sight.」→「滚，别让我看见你。」\n"
     "· 「You're a dead man.」→「你死定了。」"
+)
+
+# 对话场景批量翻译：只用于连续短对话。1.8B 实测能保留 [n] 行号。
+# 短标签/UI/物品名：不要套用对话口语规则。
+TRANSLATION_SYS_PROMPT_LABEL = (
+    "你是《潜行者 S.T.A.L.K.E.R.》的游戏本地化译者。输入是物品、按钮、"
+    "菜单或界面短标签。译成简洁、直白、统一的简体中文；不加语气词，"
+    "不扩写，不解释。占位符、控制符、代码/条目ID逐字保留。"
+    "专名使用游戏约定译名；只输出译文本身。"
+)
+
+TRANSLATION_BATCH_SYS_PROMPT = (
+    "你是《潜行者 S.T.A.L.K.E.R.》的场景对话译者。输入是多行连续对话，"
+    "每行以 [n] 开头。逐行翻译成自然、口语化的简体中文；必须保留每行"
+    "开头的 [n] 编号、行数和顺序，不合并、不拆分、不解释、不加角色名。"
+    "上下文里前后句只帮助理解，不要翻译没有编号的内容。"
+    "术语提示只在语义相符时采用；引号内的阵营、地名、物品、人名也要译成中文。"
+    "只输出带编号的译文行。"
 )
 
 # 模型偶尔会把整段系统提示词当译文回显。用固定锚点做硬校验，
@@ -615,6 +639,8 @@ def looks_like_prompt_echo(text):
 _RU_PROFANITY_RE = re.compile(
     r"дерьм|заткн|хрен|чёрт|черт|бля|хуй|пизд|ебат|еб[ао]|говн|суч|"
     r"сдох|жоп|муд[ао]|уёб|уеб|нахуй|иди ты|пошёл ты|пошел ты", re.I)
+# 中文译文里出现连续两个以上西里尔字母，基本就是模型漏译/原样保留。
+_CYR_WORD_RE = re.compile(r"[А-Яа-яЁё]{2,}")
 _ZH_PROFANITY_RE = re.compile(
     r"他妈|妈的|操(?:你|他|她|它|死|蛋|逼|屄)|我操|"
     r"靠[！!。.，,]|滚(?:蛋|开|！|!|。|，)|闭嘴|混蛋|畜生|王八|去死|"
@@ -626,6 +652,10 @@ _PROFANITY_RETRY_NOTE = (
 _PLACEHOLDER_RETRY_NOTE = (
     "必须逐字保留输入里的 $$R0$$、$$R1$$ 等控制占位符，"
     "数量、顺序和写法都不能改；只翻译占位符以外的正文。")
+_RESIDUAL_CYRILLIC_NOTE = (
+    "译文里仍夹着俄文（%s）。引号里的阵营、组织、地名、物品、人名"
+    "同样要译成中文；只有代码、型号、条目ID、文件路径保留原文，"
+    "不要保留俄文单词。")
 
 
 def has_source_profanity(text):
@@ -1543,9 +1573,13 @@ def load_term_layers():
     case_sensitive |= names
     case_sensitive |= {k for k in technical if re.search(r"[A-Za-z]", k)}
     case_sensitive |= {k for k in canon if _RISKY_LATIN_RE.match(k)}
+    quote_required = meta.get("quote_required")
+    quote_required = ({str(k) for k in quote_required if str(k).strip()}
+                      if isinstance(quote_required, list) else set())
     return {"canon": canon, "names": names, "technical": technical,
             "reference": reference, "variants": variants,
-            "case_sensitive": case_sensitive}
+            "case_sensitive": case_sensitive,
+            "quote_required": quote_required}
 
 
 def load_hard_glossary_keys():
@@ -2106,12 +2140,13 @@ def verify_artifact(path, task, log, known_hashes=None):
 
 class LlamaServer(object):
     def __init__(self, exe, model, variant, log, ctx_size=8192, tier="",
-                 gpu_layers=99):
+                 gpu_layers=99, parallel=1):
         self.exe = exe
         self.model = model
         self.variant = variant
         self.log = log
         self.ctx_size = int(ctx_size)
+        self.parallel = max(1, min(4, int(parallel)))
         self.tier = tier
         self.gpu_layers = 0 if variant == "cpu" else int(gpu_layers)
         self.proc = None
@@ -2235,7 +2270,7 @@ class LlamaServer(object):
                 "--n-gpu-layers", str(self.gpu_layers),
                 # 翻译请求是串行的：1 个槽位足够。新版 llama-server 的
                 # auto 会给 4 个槽位（每槽一套 16K 上下文），白占显存/内存。
-                "--parallel", "1",
+                "--parallel", str(self.parallel),
                 "--temp", "0.1"]
         if self.variant in GPU_VARIANTS:
             # 只要 GPU 识别所需的 I 级行（using device / offloaded N/M layers）。
@@ -2294,7 +2329,8 @@ class LlamaServer(object):
 
     def translate(self, text, src_lang, tgt_lang, glossary_hits=None,
                   timeout_sec=180, max_tokens=None, use_extra=True,
-                  extra_sys=None, temperature=None):
+                  extra_sys=None, temperature=None, context=None,
+                  style=None):
         """单条翻译请求。被 max_tokens 截断时抛 OutputTruncated（不重试）。
 
         提示词里的语言用**全名**（"俄语"）而不是语言码（"ru"）：小模型对
@@ -2318,6 +2354,9 @@ class LlamaServer(object):
             user_msg = "将下面的%s文本翻译为%s：\n%s" % (src, tgt, text)
         else:
             user_msg = "将下面文本翻译为%s：\n%s" % (tgt, text)
+        if context:
+            user_msg = ("上下文（仅供理解，不要翻译）：" + chr(10)
+                        + str(context) + chr(10) + chr(10) + user_msg)
         if glossary_hits:
             block, _used = glossary_hint_block(glossary_hits)
             if block:
@@ -2441,6 +2480,67 @@ class LlamaServer(object):
                 fp.close()
             except Exception:
                 pass
+
+    def translate_batch(self, lines, src_lang, tgt_lang, glossary_hits=None,
+                        timeout_sec=180, max_tokens=None,
+                        temperature=None):
+        """连续对话批量翻译：输入若干源文行，输出带 [n] 编号的译文。"""
+        if not self.is_running():
+            raise IOError("引擎未运行")
+        if src_lang in ("auto", "text"):
+            src_lang = detect_text_lang(lines[0] if lines else "") or src_lang
+        tgt = LANG_FULL.get(tgt_lang, tgt_lang)
+        numbered = chr(10).join("[%d] %s" % (i + 1, line)
+                                for i, line in enumerate(lines))
+        sys_msg = TRANSLATION_BATCH_SYS_PROMPT
+        extra = (getattr(self, "prompt_extra", "") or "").strip()
+        if extra:
+            sys_msg += chr(10) + "补充要求（优先遵守）：" + chr(10) + extra
+        user_msg = ("把下面的连续对话逐行翻译为%s：" % tgt
+                    + chr(10) + numbered)
+        if glossary_hits:
+            block, _used = glossary_hint_block(glossary_hits)
+            if block:
+                user_msg = block + chr(10) + chr(10) + user_msg
+        if max_tokens is None:
+            max_tokens = max(1024, int(self.ctx_size * 0.6))
+        payload = json.dumps({
+            "model": "hy-mt2",
+            "messages": [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": (0.1 if temperature is None
+                            else float(temperature)),
+            "max_tokens": max_tokens,
+            "stream": False,
+        }).encode("utf-8")
+        last_err = None
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(
+                    self.base + "/v1/chat/completions",
+                    data=payload,
+                    headers={"Content-Type": "application/json",
+                             "User-Agent": UA},
+                    method="POST")
+                with urllib.request.urlopen(req, timeout=timeout_sec) as r:
+                    data = json.loads(r.read().decode("utf-8", "ignore"))
+            except Exception as e:
+                last_err = "%s: %s" % (type(e).__name__, e)
+                time.sleep(1.0)
+                continue
+            choices = data.get("choices") or []
+            if not choices:
+                last_err = str(data.get("error", ""))[:120]
+                time.sleep(1.0)
+                continue
+            choice = choices[0]
+            content = ((choice.get("message") or {}).get("content") or "").strip()
+            if choice.get("finish_reason") == "length":
+                raise OutputTruncated("批量输出被截断")
+            return content
+        raise IOError("批量翻译请求失败（%s）" % (last_err or "无响应"))
 
     def stop(self):
         if self.proc is None and self._log_fp is None:
@@ -3325,6 +3425,35 @@ def clean_translation_output(text):
         return text
     return _DUP_FUNCTION_RE.sub(lambda m: m.group(1)[0], text)
 
+_STYLE_REPLACEMENTS = (
+    ("我不得不说", "说实话"),
+    ("就目前而言", "现在"),
+    ("就目前来看", "现在看"),
+    ("并且", "而且"),
+    ("此外", "还有"),
+    ("然而", "可"),
+    ("因此", "所以"),
+    ("进行了一次", "做了一次"),
+    ("作出了", "做了"),
+    ("给予了", "给了"),
+)
+
+
+def style_cleanup_cn(text):
+    """对话专用：保守去掉翻译腔词和高频空格，不改术语、数字、代码。"""
+    if not text:
+        return text
+    out = text
+    for old, new in _STYLE_REPLACEMENTS:
+        out = out.replace(old, new)
+    # 中文之间的半角空格；中文与中文标点之间的空格。
+    out = re.sub(r"(?<=[一-鿿])[ 	]+(?=[一-鿿])", "", out)
+    out = re.sub(r"[ 	]+(?=[，。！？；：、])", "", out)
+    out = re.sub(r"(?<=[，。！？；：、])[ 	]+", "", out)
+    # 口语里常见的三个点统一成中文省略号（代码/占位符已在上层排除）。
+    out = out.replace("...", "……")
+    return out
+
 
 class TranslationJob(object):
     def __init__(self, parser, server, in_dir, mode, src_lang, tgt_lang,
@@ -3346,13 +3475,21 @@ class TranslationJob(object):
         self.glossary = dict(glossary or {})
         term_layers = load_term_layers()
         self.gloss_names = set(term_layers["names"])
+        # 百科/任务/界面/新闻只做软提示：精确命中才注入，不强制替换。
+        self.gloss_soft = set(term_layers.get("reference") or ())
         self.gloss_variants = dict(term_layers["variants"])
         self.gloss_case_sensitive = set(term_layers["case_sensitive"])
+        self.gloss_quote_required = set(
+            term_layers.get("quote_required") or ())
         # 技术精确表只做整条命中；不进入硬词/提示层。
         for _k, _v in load_technical_exact().items():
             self.glossary.setdefault(_k, _v)
         self.output_anyway = output_anyway
         self.force_glossary = force_glossary
+        self._ctx_hint = ""
+        self._style_hint = "dialogue"
+        self.dialogue_temp = 0.1
+        self.batch_stats = {"batches": 0, "lines": 0, "failed": 0}
         self.ctx_size = int(ctx_size)
         self.safe_chars = safe_chunk_chars(self.ctx_size)
         self.long_chunks = 0
@@ -3508,6 +3645,33 @@ class TranslationJob(object):
             self.glossary, case_sensitive=self.gloss_case_sensitive,
             variants=self.gloss_variants)
 
+    def _span_context_ok(self, text, start, end, key):
+        """阵营常见词（долг/свобода/монолит）只认引号内的专名用法。
+
+        `долг` 本义是债务/责任，`свобода` 是自由，`монолит` 是整块石料；
+        只有 `"Долга"` 这种引号内的组织名才强制替换，避免把普通名词
+        硬改成“纪律团/自由团/黑石”。
+        """
+        if key not in self.gloss_quote_required:
+            return True
+        return self._inside_quotes(text, start, end)
+
+    @staticmethod
+    def _inside_quotes(text, start, end):
+        """词条是否位于任意引号对内，而不是只贴着引号。
+
+        原文常见 `"Броня Долга"`、`"база Свободы"` 这种引号包住的多词
+        名称：`Долга/Свободы` 不紧贴引号，但仍在引号语境里，应算专名。
+        """
+        for op, cl in (("«", "»"), ("“", "”"), ("‘", "’")):
+            if (text.rfind(op, 0, start) > text.rfind(cl, 0, start)
+                    and text.find(cl, end) != -1):
+                return True
+        for q in ('"', "'"):
+            if text.count(q, 0, start) % 2 == 1 and text.find(q, end) != -1:
+                return True
+        return False
+
     def _glossary_hits(self, text):
         """命中的硬术语 + 人物软提示，用于提示块；普通词不注入。
 
@@ -3516,23 +3680,31 @@ class TranslationJob(object):
         """
         if self.gloss is None:
             return []
-        pairs = self.gloss.hits(text)
+        spans = self.gloss.find(text)
+        pairs = [(key, self.gloss._map[key]) for start, end, key in spans
+                 if self._span_context_ok(text, start, end, key)]
         if self.gloss_hard is None:
             return pairs
         hard = [(k, v) for k, v in pairs
                 if k in self.gloss_hard or k in self.session_keys]
-        if not self.gloss_names:
-            return hard
         used = {k for k, _v in hard}
         names = [(k, v) for k, v in pairs
                  if k in self.gloss_names and k not in used]
-        return hard + names
+        used |= {k for k, _v in names}
+        # 软层只提示不强制；长句/过长的百科条目会挤占 240 字符预算，
+        # 直接跳过，让硬词和短专名优先。
+        soft = [(k, v) for k, v in pairs
+                if k in self.gloss_soft and k not in used
+                and len(k) <= 32]
+        return hard + names + soft
 
     def _glossary_spans(self, text):
         """命中的硬术语 (start, end, key)，用于强制/切片。"""
         if self.gloss is None:
             return []
         spans = self.gloss.find(text)
+        spans = [h for h in spans
+                 if self._span_context_ok(text, h[0], h[1], h[2])]
         if self.gloss_hard is None:
             return spans
         return [h for h in spans if h[2] in self.gloss_hard]
@@ -3632,7 +3804,10 @@ class TranslationJob(object):
             try:
                 return self.srv.translate(
                     content, lang, self.tgt, glossary_hits=hints,
-                    extra_sys=note or None)
+                    extra_sys=note or None,
+                    context=getattr(self, "_ctx_hint", "") or None,
+                    style=getattr(self, "_style_hint", "dialogue"),
+                    temperature=self._temp_for_style())
             except OutputTruncated:
                 if depth >= 3 or len(content) < 8:
                     self.log("  输出被截断且已无法再切分（%d 字符），"
@@ -3674,12 +3849,21 @@ class TranslationJob(object):
         hints = None if self.force_glossary else self._glossary_hits(text)
         return self._translate_chunk(text, lang, hints, note=note)
 
-    def _translate_one(self, text, lang):
+    def _temp_for_style(self):
+        if self._style_hint == "label":
+            return 0.0
+        if self._style_hint == "formal":
+            return 0.1
+        return self.dialogue_temp
+
+    def _translate_one(self, text, lang, context="", style="dialogue"):
         """翻译一个文本串；运行期占位符先 mask，译后校验并回填。
 
         校验失败（模型改了/丢了 `$name`、`%s`、`\n` 等）时**保留原文**，
         绝不把坏译文写进文本表。这是硬约束，不依赖提示词。
         """
+        self._ctx_hint = context or ""
+        self._style_hint = style or "dialogue"
         if lang in ("auto", "text"):
             lang = detect_text_lang(text) or self._lang_hint or "rus"
         elif lang in ("rus", "eng"):
@@ -3722,6 +3906,12 @@ class TranslationJob(object):
         if looks_like_prompt_echo(out):
             self.detail("  模型回显提示词，保留原文：%s" % str(text)[:60])
             return text
+        # 残留源词确定性替换：模型把专名原样保留时，直接按词库换掉；
+        # 不调用模型，也不改动句子其它部分。替换后再看是否还残留俄文。
+        out = self._repair_residual_source_terms(normalized, out)
+        out = self._repair_known_semantic_terms(normalized, out, lang)
+        if self._style_hint == "dialogue" and has_cjk(out):
+            out = style_cleanup_cn(out)
         # 多行保真：模型偶尔把整段合并成一行；带明确数量再试一次。
         source_nl = normalized.count("\n")
         if source_nl and out.count("\n") != source_nl:
@@ -3791,6 +3981,28 @@ class TranslationJob(object):
                 self.detail("  译文无中文，已按完整性要求重试：%s"
                             % str(text)[:50])
                 out = retry
+        # 残留俄文闸门：中文译文里还夹着西里尔词，通常是引号内的格变专名
+        # 被模型当成不可译名原样保留。带“引号内也要译”要求重试一次；
+        # 仍残留则保留首次译文，不强行音译未知专名。
+        residual = _CYR_WORD_RE.findall(out)
+        if has_cjk(out) and residual:
+            note = _RESIDUAL_CYRILLIC_NOTE % "、".join(
+                list(dict.fromkeys(residual))[:3])
+            try:
+                if mapping:
+                    retry_raw = self._translate_plain(
+                        masked, lang, note=note)
+                    retry = restore_runtime_tokens(retry_raw, mapping)
+                else:
+                    retry = self._translate_plain(
+                        normalized, lang, note=note)
+            except Exception:
+                retry = None
+            if retry and not looks_like_prompt_echo(retry) \
+                    and has_cjk(retry) and not _CYR_WORD_RE.search(retry):
+                self.detail("  译文残留俄文，已按引号内也译重试：%s"
+                            % str(text)[:50])
+                out = retry
         final = escape_newlines(out)
         self._tm_store(normalized, lang, final)
         return final
@@ -3804,6 +4016,17 @@ class TranslationJob(object):
         if self.force_glossary and self.gloss is not None:
             return self._translate_force(text, lang, note=note)
         return self._translate_segments(text, lang, note=note)
+
+    @staticmethod
+    def _inline_term_value(text, start, end, value):
+        """源文本身在引号内时，去掉词条目标的外层引号，避免““纪律团””。"""
+        v = str(value)
+        quotes = "\"'«»“”‘’"
+        if (start > 0 and end < len(text)
+                and text[start - 1] in quotes and text[end] in quotes
+                and len(v) >= 2 and v[0] in quotes and v[-1] in quotes):
+            return v[1:-1]
+        return v
 
     def _translate_sliced(self, text, lang, note=""):
         """旧的强制术语做法：把术语之间的片段**各自**送翻，术语直接拼接。
@@ -3819,12 +4042,70 @@ class TranslationJob(object):
             if start > last:
                 out.append(self._translate_segments(
                     text[last:start], lang, note=note))
-            out.append(self.glossary[key])
+            out.append(self._inline_term_value(
+                text, start, end, self.glossary[key]))
             last = end
         if last < len(text):
             out.append(self._translate_segments(
                 text[last:], lang, note=note))
         return "".join(out) if out else text
+
+    def _repair_residual_source_terms(self, src, out):
+        """A 译文里仍原样留着源文术语时，按词库直接替换，不调用模型。
+
+        只处理 hard canon 且通过引号/大小写策略的 span；替换不改动其它
+        文字、标点或换行。比整条重译零风格风险，专门兜住 `"Автомобилист"`
+        这类模型当成专名保留的情况。
+        """
+        if not src or not out or self.gloss is None:
+            return out
+        spans = self._glossary_spans(src)
+        if not spans:
+            return out
+        quotes = "\"'«»“”‘’"
+        for start, end, key in spans:
+            term = src[start:end]
+            value = self.glossary.get(key)
+            if not term or value is None:
+                continue
+            # 只处理真正的俄文词；拉丁型号（damper.sys、AK-74）留在代码/文件名里，
+            # 不能因为词库里有 damper→阻尼器 就把 damper.sys 改成阻尼器.sys。
+            if not _CYR_WORD_RE.search(term):
+                continue
+            if re.search(r"[\\/]", term) or re.search(
+                    r"\.[A-Za-z0-9]{1,5}$", term):
+                continue
+            v = str(value)
+            if (self._inside_quotes(src, start, end) and len(v) >= 2
+                    and v[0] in quotes and v[-1] in quotes):
+                v = v[1:-1]
+            if not v or v == term or term not in out:
+                continue
+            pattern = re.compile(
+                r"(?<![А-Яа-яЁё])%s(?![А-Яа-яЁё])" % re.escape(term))
+            out2 = pattern.sub(lambda _m: v, out)
+            if out2 != out:
+                self.detail("  残留源词按词库替换：%s → %s"
+                            % (term, v))
+                out = out2
+        return out
+
+    def _repair_known_semantic_terms(self, src, out, lang=""):
+        """英文源里两个已知语义错译的定点修复。
+
+        Controller 在 STALKER 里是脑波怪，不是“控制器”；Freedom 是
+        自由团，不是“自由派”。只在英文源、且源文确实出现该词时修，
+        不改中文里正常的“控制器/自由”用法。
+        """
+        if not src or not out or lang != "eng":
+            return out
+        low = src.lower()
+        if re.search(r"(?<![A-Za-z])controllers?(?![A-Za-z])", low):
+            out = re.sub(r"控制者|控制器", "脑波怪", out)
+        if re.search(r"(?<![A-Za-z])Freedom(?![A-Za-z])", src) or "freedom faction" in low:
+            out = re.sub(r"自由派(?:团体|势力|派别|阵营|组织)?",
+                         "“自由团”", out)
+        return out
 
     def _translate_force(self, text, lang, note=""):
         """强制术语：先把术语换成占位符，**整串一次翻译**，再把占位符回填成
@@ -3846,7 +4127,8 @@ class TranslationJob(object):
         last = 0
         for i, (start, end, key) in enumerate(hits, 1):
             ph = "$$T%d$$" % i
-            mapping[ph] = self.glossary[key]
+            mapping[ph] = self._inline_term_value(
+                text, start, end, self.glossary[key])
             parts.append(text[last:start])
             parts.append(ph)
             last = end
@@ -3883,8 +4165,11 @@ class TranslationJob(object):
         self.req_count += 1
         self.trans_chars += len(masked)
         if len(masked) <= self.safe_chars:
-            return self.srv.translate(masked, lang, self.tgt,
-                                      extra_sys=note or None)
+            return self.srv.translate(
+                masked, lang, self.tgt, extra_sys=note or None,
+                context=getattr(self, "_ctx_hint", "") or None,
+                style=getattr(self, "_style_hint", "dialogue"),
+                temperature=self._temp_for_style())
         parts = split_protected(masked, self.safe_chars, _PLACEHOLDER_RE)
         self.long_chunks += max(0, len(parts) - 1)
         self.log("  长文本 %d 字符 → 自动切为 %d 段翻译（%s 上下文窗）"
@@ -4662,6 +4947,99 @@ class TranslationJob(object):
             f.write("\n".join(lines) + "\n")
         os.replace(tmp, out)
 
+    @staticmethod
+    def _entry_style(rel, src):
+        low = (rel or "").lower().replace(os.sep, "/")
+        if "dialog" in low:
+            return "dialogue"
+        if ("/ui/" in low or "ui_" in low or "items" in low):
+            return "label"
+        s = (src or "").strip()
+        if len(s) <= 48 and not re.search(r"[.!?。！？；;:]", s):
+            return "label"
+        if ("encyclopedia" in low or "news" in low
+                or "enc_" in low):
+            return "formal"
+        return "dialogue"
+
+    def _scene_context(self, metas, idx):
+        """取同表前后各 2 条源文作场景上下文（最多 240 字符）。"""
+        parts = []
+        for j in range(idx - 1, max(-1, idx - 3), -1):
+            src = (metas[j].get("src") or "").strip()
+            if src:
+                parts.insert(0, "前一句：" + src)
+        for j in range(idx + 1, min(len(metas), idx + 3)):
+            src = (metas[j].get("src") or "").strip()
+            if src:
+                parts.append("后一句：" + src)
+        text = "\\n".join(parts)
+        return text[:240]
+
+    def _parse_numbered_batch(self, out, n):
+        found = {}
+        for line in (out or "").splitlines():
+            m = re.match(r"^\s*\[(\d+)\]\s*(.*)$", line)
+            if not m:
+                continue
+            i = int(m.group(1))
+            if 1 <= i <= n and i not in found:
+                found[i] = m.group(2).strip()
+        if len(found) != n or any(not found.get(i) for i in range(1, n + 1)):
+            return None
+        return [found[i] for i in range(1, n + 1)]
+
+    def _translate_dialogue_batch(self, batch):
+        """批量翻译 2～4 条连续短对话；失败返回 {}，交由逐条路径。"""
+        lines = [x["src"] for x in batch]
+        pairs = []
+        seen = set()
+        for x in batch:
+            for k, v in self._glossary_hits(x["src"]):
+                if k not in seen:
+                    seen.add(k)
+                    pairs.append((k, v))
+        self.batch_stats["batches"] += 1
+        self.req_count += 1
+        self.trans_chars += sum(len(x["src"]) for x in batch)
+        try:
+            out = self.srv.translate_batch(
+                lines, batch[0]["lang"], self.tgt,
+                glossary_hits=pairs or None,
+                temperature=self.dialogue_temp)
+        except Exception:
+            self.batch_stats["failed"] += 1
+            return {}
+        parsed = self._parse_numbered_batch(out, len(batch))
+        if not parsed:
+            self.batch_stats["failed"] += 1
+            return {}
+        result = {}
+        for x, text in zip(batch, parsed):
+            text = clean_translation_output(text)
+            text = self._repair_residual_source_terms(x["src"], text)
+            xlang = x["lang"]
+            if xlang in ("auto", "text", "rus", "eng"):
+                det = detect_text_lang(x["src"])
+                if det:
+                    xlang = det
+            text = self._repair_known_semantic_terms(
+                x["src"], text, xlang)
+            if self._entry_style(x["rel"], x["src"]) == "dialogue":
+                text = style_cleanup_cn(text)
+            if (not text or not has_cjk(text)
+                    or text.strip() == x["src"].strip()
+                    or looks_like_prompt_echo(text)
+                    or (has_source_profanity(x["src"])
+                        and not has_zh_profanity(text))):
+                self.batch_stats["failed"] += 1
+                return {}
+            lead = x["src"][:len(x["src"]) - len(x["src"].lstrip())]
+            trail = x["src"][len(x["src"].rstrip()):]
+            result[x["id"]] = (x["lang"], lead + text.strip() + trail)
+        self.batch_stats["lines"] += len(batch)
+        return result
+
     def _translate_table(self, full, out_path, rel):
         st = {"translated": 0, "skipped": 0, "failed": 0,
               "changed": False, "copied": False}
@@ -4695,10 +5073,74 @@ class TranslationJob(object):
                 tm_values.append(src)
             self._tm_enable_table(tm_values, rel)
         changes = {}
+        metas = []
         for ent in ents:
+            lang0, src0 = self._pick_source(ent)
+            metas.append({
+                "id": ent.id, "ent": ent, "lang": lang0, "src": src0,
+                "rel": rel, "style": self._entry_style(rel, src0 or ""),
+            })
+        batched_ids = set()
+        if "dialog" in rel.lower() and not self.force_glossary:
+            def _ok(meta):
+                src0 = meta["src"]
+                if not src0 or not src0.strip():
+                    return False
+                if len(src0) < 4 or len(src0) > 220 or chr(10) in src0:
+                    return False
+                if _RUNTIME_TOKEN_RE.search(src0):
+                    return False
+                # 含 hard 术语的句子不进批量：批量只用提示，容易丢术语；
+                # 交给逐条路径（占位符/校验更完整）。
+                if (self.gloss_hard is not None
+                       and any(k in self.gloss_hard
+                               for k, _v in self._glossary_hits(src0))):
+                    return False
+                if self._looks_like_target(src0) or not _has_translatable_text(src0):
+                    return False
+                if src0.strip() in self.glossary:
+                    return False
+                if (looks_like_code_or_debug(rel, src0)
+                        or looks_like_generated_noise(rel, src0)
+                        or looks_like_technical_text(src0)
+                        or looks_like_identifier_text(src0)):
+                    return False
+                if self.only_referenced and meta["id"] not in self._ref_counts:
+                    return False
+                if self.protect_proper and looks_like_proper_text(rel, src0):
+                    return False
+                return True
+            i = 0
+            while i < len(metas):
+                if not _ok(metas[i]):
+                    i += 1
+                    continue
+                batch = [metas[i]]
+                total = len(metas[i]["src"])
+                j = i + 1
+                while (j < len(metas) and len(batch) < 4
+                       and _ok(metas[j])
+                       and metas[j]["lang"] == metas[i]["lang"]
+                       and total + len(metas[j]["src"]) <= 700):
+                    batch.append(metas[j])
+                    total += len(metas[j]["src"])
+                    j += 1
+                if len(batch) >= 2:
+                    got = self._translate_dialogue_batch(batch)
+                    if got:
+                        changes.update(got)
+                        batched_ids.update(got)
+                        st["translated"] += len(got)
+                        i = j
+                        continue
+                i += 1
+        for meta_idx, meta in enumerate(metas):
+            ent = meta["ent"]
+            if ent.id in batched_ids:
+                continue
             if self._cancelled():
                 break
-            lang, src = self._pick_source(ent)
+            lang, src = meta["lang"], meta["src"]
             if not src or not src.strip():
                 continue
             if self._looks_like_target(src):
@@ -4740,8 +5182,12 @@ class TranslationJob(object):
                 det = detect_text_lang(src)
                 if det and det != use_lang:
                     use_lang = det
+            ctx = ""
+            if meta["style"] == "dialogue" and "dialog" in rel.lower():
+                ctx = self._scene_context(metas, meta_idx)
             try:
-                out = self._translate_one(src, use_lang)
+                out = self._translate_one(
+                    src, use_lang, context=ctx, style=meta["style"])
             except Exception as e:
                 st["failed"] += 1
                 self.detail("  条目翻译失败，保留原文：%s（%s: %s）"
@@ -5116,6 +5562,67 @@ class TranslationJob(object):
             self._warn_mojibake(fn, samples)
         done = {}
         self._temp_clock = time.time()
+        metas = []
+        for ent in texts:
+            lang0, src0 = self.p.getRecommendLangText(ent, self.tgt)
+            metas.append({
+                "id": ent.id, "ent": ent, "lang": lang0,
+                "src": src0 if isinstance(src0, str) else "",
+                "rel": full,
+                "style": self._entry_style(full, src0 or ""),
+            })
+        batched = set()
+        if "dialog" in full.lower() and not self.force_glossary:
+            def _ok(meta):
+                src0 = meta["src"]
+                if not src0 or not src0.strip() or meta["id"] in reuse:
+                    return False
+                if len(src0) < 4 or len(src0) > 220 or chr(10) in src0:
+                    return False
+                if _RUNTIME_TOKEN_RE.search(src0):
+                    return False
+                # 含 hard 术语的句子不进批量：批量只用提示，容易丢术语；
+                # 交给逐条路径（占位符/校验更完整）。
+                if (self.gloss_hard is not None
+                       and any(k in self.gloss_hard
+                               for k, _v in self._glossary_hits(src0))):
+                    return False
+                if self._looks_like_target(src0) or not _has_translatable_text(src0):
+                    return False
+                if (looks_like_code_or_debug(full, src0)
+                        or looks_like_generated_noise(full, src0)
+                        or looks_like_technical_text(src0)
+                        or looks_like_identifier_text(src0)):
+                    return False
+                if self.only_referenced and meta["id"] not in self._ref_counts:
+                    return False
+                if self.protect_proper and looks_like_proper_text(full, src0):
+                    return False
+                return True
+            i = 0
+            while i < len(metas):
+                if not _ok(metas[i]):
+                    i += 1
+                    continue
+                batch = [metas[i]]
+                total = len(metas[i]["src"])
+                j = i + 1
+                while (j < len(metas) and len(batch) < 4
+                       and _ok(metas[j])
+                       and metas[j]["lang"] == metas[i]["lang"]
+                       and total + len(metas[j]["src"]) <= 700):
+                    batch.append(metas[j])
+                    total += len(metas[j]["src"])
+                    j += 1
+                if len(batch) >= 2:
+                    got = self._translate_dialogue_batch(batch)
+                    if got:
+                        for eid, (_lang, new) in got.items():
+                            done[eid] = new
+                        batched.update(got)
+                        i = j
+                        continue
+                i += 1
         for n, ent in enumerate(texts, 1):
             if self._cancelled():
                 self._flush_temp(temp_path, done)
@@ -5127,6 +5634,8 @@ class TranslationJob(object):
                     self.redundant.append(ent.id)
             else:
                 self._past.add(ent.id)
+            if ent.id in batched:
+                continue
             if ent.id in reuse:
                 done[ent.id] = reuse[ent.id]
                 continue
@@ -5144,8 +5653,13 @@ class TranslationJob(object):
                     det = detect_text_lang(src)
                     if det and det != use_lang:
                         use_lang = det
+                style = self._entry_style(full, src)
+                ctx = ""
+                if style == "dialogue" and "dialog" in full.lower():
+                    ctx = self._scene_context(metas, n - 1)
                 try:
-                    done[ent.id] = self._translate_one(src, use_lang)
+                    done[ent.id] = self._translate_one(
+                        src, use_lang, context=ctx, style=style)
                 except Exception as e:
                     self.failed_strings += 1
                     self.detail("  条目翻译失败，保留原文：%s（%s: %s）"

@@ -328,7 +328,7 @@ class FakeServer(object):
         self.truncate_once = list(truncate_once)
 
     def translate(self, text, src, tgt, glossary_hits=None, timeout_sec=180,
-                  max_tokens=None, extra_sys=None):
+                  max_tokens=None, extra_sys=None, **kwargs):
         self.calls.append(text)
         for w in self.fail_words:
             if w in text:
@@ -466,7 +466,8 @@ def t6_truncation():
 
     class AlwaysTrunc(FakeServer):
         def translate(self, text, src, tgt, glossary_hits=None,
-                      timeout_sec=180, max_tokens=None, extra_sys=None):
+                      timeout_sec=180, max_tokens=None, extra_sys=None,
+                      **kwargs):
             raise ait.OutputTruncated("总是截断")
 
     job2 = make_job(TMP, server=AlwaysTrunc())
@@ -823,6 +824,9 @@ def t14_prompt_extra():
           ait.looks_like_prompt_echo(base_en[:80])
           and ait.looks_like_prompt_echo(base[:80])
           and not ait.looks_like_prompt_echo("这不是提示词，是正常译文。"))
+    check("T14-15 两版提示词都含“引号不保留原文”条款",
+          "引号不是保留原文的理由" in base
+          and "引号不是保留原文的理由" in base_en)
 
     # 7) 多行输入框读写（Tk Text 语义 / Qt 语义都要兼容）
     class FakeTkText(object):
@@ -1618,8 +1622,8 @@ def t34_engine_mem_and_slow_log():
     print("--- T34 引擎参数 / 慢解析取证 ---")
     import inspect
     src = inspect.getsource(ait.LlamaServer._start_once)
-    check("T34-1 单 slot 跑翻译（--parallel 1，少一份槽位开销）",
-          '"--parallel"' in src and '"1"' in src)
+    check("T34-1 并行槽参数可配置（默认 1，少一份槽位开销）",
+          '"--parallel"' in src and 'str(self.parallel)' in src)
     check("T34-2 子进程已接入 kill-on-close 作业",
           "_assign_server_to_kill_job(self.proc)" in src)
     src_tab = inspect.getsource(ait.AiTranslateTab.__init__)
@@ -1645,11 +1649,22 @@ class _FakeServer:
 
     def translate(self, text, src, tgt, glossary_hits=None,
                   timeout_sec=180, max_tokens=None, use_extra=True,
-                  extra_sys=None):
+                  extra_sys=None, context=None, style=None,
+                  temperature=None):
         self.calls.append(text)
         if self.fn is not None:
             return self.fn(text)
         return "译[" + text + "]"
+
+    def translate_batch(self, lines, src, tgt, glossary_hits=None,
+                        timeout_sec=180, max_tokens=None,
+                        temperature=None):
+        self.calls.extend(lines)
+        out = []
+        for i, line in enumerate(lines, 1):
+            text = self.fn(line) if self.fn is not None else "译[" + line + "]"
+            out.append("[%d] %s" % (i, text))
+        return chr(10).join(out)
 
 
 def _ref_tree():
@@ -2041,7 +2056,8 @@ def t42_script_context_and_english():
             self.langs = []
 
         def translate(self, text, src, tgt, glossary_hits=None,
-                      timeout_sec=180, max_tokens=None, extra_sys=None):
+                      timeout_sec=180, max_tokens=None, extra_sys=None,
+                      **kwargs):
             self.calls.append(text)
             self.langs.append((text, src))
             return "译[" + text + "]"
@@ -2298,9 +2314,9 @@ def t47_termbase_v2():
           meta.get("format") == "stalker-toolkit-termbase/2"
           and meta.get("layers", {}).get("canon")
           and meta.get("layers", {}).get("technical"))
-    check("T47-2 四层规模：canon 1375 / names 3067 / technical 18",
-          len(layers["canon"]) == 1375
-          and len(layers["names"]) == 3067
+    check("T47-2 四层规模：canon 1453 / names 3069 / technical 18",
+          len(layers["canon"]) == 1453
+          and len(layers["names"]) == 3069
           and len(layers["technical"]) == 18,
           "%d/%d/%d" % (len(layers["canon"]), len(layers["names"]),
                         len(layers["technical"])))
@@ -2325,9 +2341,9 @@ def t47_termbase_v2():
           got2 and got2[0][2] == "Санек"
           and idx.hits("Санёк")[0][1] == "萨涅克", str(got2))
     check("T47-7 小写拉丁专名不误伤正文，大写专名仍命中",
-          idx.find("crystal") == [] and idx.find("bar") == []
-          and [k for _, _, k in idx.find("Crystal")] == ["crystal"]
-          and [k for _, _, k in idx.find("Bar")] == ["bar"])
+          idx.find("bar") == [] and idx.find("star") == []
+          and [k for _, _, k in idx.find("Bar")] == ["bar"]
+          and [k for _, _, k in idx.find("Star")] == ["star"])
     check("T47-8 人物名首字母大小写敏感",
           [k for _, _, k in idx.find("Кот спит")] == ["Кот"]
           and idx.find("кот спит") == [])
@@ -2368,7 +2384,11 @@ def t48_tm_lite():
         with io.open(os.path.join(ind, "configs", "localization.ltx"),
                      "w", encoding="utf-8", newline="\n") as f:
             f.write("[string_table]\nlanguage = rus\nfiles = t\n")
-        srv = _FakeServer()
+        def fake(text):
+            return ("重复任务文本。" if "Повторяющийся" in text
+                    else "唯一任务文本。")
+
+        srv = _FakeServer(fn=fake)
         try:
             job, ok, _logs = _run_ref_job(
                 ait, ind, out, srv, protect_proper=False, tm_lite=True)
@@ -2389,10 +2409,10 @@ def t48_tm_lite():
     check("T48-2 重复句只请求一次并复用译文",
           len(srv.calls) == unique + 1
           and job.tm_stats.get("hits") == dup - 1
-          and body.count("译[Повторяющийся текст задачи.]") == dup,
+          and body.count("重复任务文本。") == dup,
           "calls=%d hits=%d body=%d"
           % (len(srv.calls), job.tm_stats.get("hits", 0),
-             body.count("译[Повторяющийся текст задачи.]")))
+             body.count("重复任务文本。")))
 
     job2, ok2, srv2, _body2 = run_case(48, 2)
     check("T48-3 低重复表不启用、请求数不变（4%%）",
@@ -2713,6 +2733,569 @@ def t55_english_item_audit():
 
 
 # ----------------------------------------------------------------------
+# T56 阵营屈折形与引号去重（bar_drunk_bio）
+# ----------------------------------------------------------------------
+def t56_faction_inflections():
+    print()
+    print("--- T56 阵营屈折形/引号去重 ---")
+    gloss, _s, _d, _c = ait.load_glossary_layers()
+    hard = ait.load_hard_glossary_keys()
+    layers = ait.load_term_layers()
+    idx = ait.GlossaryIndex(
+        gloss, case_sensitive=layers["case_sensitive"],
+        variants=layers["variants"])
+    src = ('Постоянно пьяный член группировки "Долга". "Долг" дал ему '
+           'последнюю возможность остаться в группировке, выполнив задание.')
+    keys = [k for _, _, k in idx.find(src)]
+    check("T56-1 Долга/Долг 都进入硬词索引",
+          "Долга" in hard and "Долг" in hard
+          and "Долга" in keys and "Долг" in keys, str(keys))
+    check("T56-2 源文引号内回填时去掉目标外层引号",
+          ait.TranslationJob._inline_term_value(
+              src, src.index("Долга"), src.index("Долга") + 5,
+              "“纪律团”") == "纪律团")
+    root = tempfile.mkdtemp(prefix="ait_faction_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    with io.open(os.path.join(ind, "configs", "text", "rus", "f.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="bar_drunk_bio"><rus>'
+                + src + '</rus></string></string_table>')
+    with io.open(os.path.join(ind, "configs", "localization.ltx"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write("[string_table]\nlanguage = rus\nfiles = f\n")
+    srv = _FakeServer()
+    try:
+        job, ok, _ = _run_ref_job(
+            ait, ind, out, srv, protect_proper=False,
+            glossary=gloss, hard_glossary_keys=hard,
+            force_glossary=True, tm_lite=False)
+        body = io.open(os.path.join(out, "configs", "text", "rus", "f.xml"),
+                       encoding="utf-8").read()
+        check("T56-3 整条不再出现“责任”",
+              ok and "责任" not in body and "纪律团" in body, body[:180])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T57 普通名词与阵营引号上下文
+# ----------------------------------------------------------------------
+def t57_faction_quote_context():
+    print()
+    print("--- T57 阵营词只认引号内的专名 ---")
+    root = tempfile.mkdtemp(prefix="ait_context_")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        check("T57-1 引号内Долга命中纪律团",
+              any(k == "Долга" and v.strip("“”") == "纪律团"
+                  for k, v in job._glossary_hits('"Долга"')),
+              str(job._glossary_hits('"Долга"')))
+        check("T57-2 普通名词долга/Долг不硬套阵营",
+              not any(v.strip("“”") == "纪律团"
+                      for _k, v in job._glossary_hits("чувство долга"))
+              and not any(v.strip("“”") == "纪律团"
+                          for _k, v in job._glossary_hits("Долг зовёт")))
+        check("T57-3 普通名词不进入强制 spans",
+              not job._glossary_spans("чувство долга")
+              and not job._glossary_spans("Долг зовёт")
+              and job._glossary_spans('"Долга"'))
+        check("T57-4 引号包住的多词名称内也能命中",
+              job._glossary_spans('"Броня Долга"')
+              and not job._glossary_spans("Броня Долга"))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T58 阵营成员名词的格变（“Свободовцам” 不再原样留俄文）
+# ----------------------------------------------------------------------
+def t58_faction_member_cases():
+    print()
+    print("--- T58 阵营成员格变（与格/属格/工具格）---")
+    root = tempfile.mkdtemp(prefix="ait_member_")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        got = job._glossary_hits("“Свободовцам”值得推荐。")
+        check("T58-1 引号内Свободовцам→自由团",
+              any(v.strip("“”") == "自由团" for _k, v in got), str(got))
+        check("T58-2 无引号成员名词不硬套",
+              not any(v.strip("“”") == "自由团"
+                      for _k, v in job._glossary_hits(
+                          "Свободовцам стоит предложить.")))
+        for phrase, want in (("“долговцам”", "纪律团"),
+                             ("“монолитовцев”", "黑石成员"),
+                             ("“свободовцами”", "自由团")):
+            hits = job._glossary_hits(phrase)
+            check("T58-3 %s→%s" % (phrase, want),
+                  any(v.strip("“”") == want for _k, v in hits), str(hits))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    root = tempfile.mkdtemp(prefix="ait_member_out_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "rus"))
+    source = ("“Свободовцам” стоит предложить. Им наверняка понравится "
+              "наше приключение.")
+    with io.open(os.path.join(ind, "configs", "text", "rus", "f.xml"),
+                 "w", encoding="utf-8", newline="\n") as f:
+        f.write('<string_table><string id="6_1_2"><rus>'
+                + source + '</rus></string></string_table>')
+    with io.open(os.path.join(ind, "configs", "localization.ltx"), "w",
+                 encoding="utf-8", newline="\n") as f:
+        f.write("[string_table]\nlanguage = rus\nfiles = f\n")
+    # 模拟正常路径：模型保留占位符，回填后引号内不应再残留俄文。
+    srv = _FakeServer(
+        fn=lambda _t: "“$$T1$$”值得推荐。他们一定会喜欢我们的冒险活动。")
+    try:
+        job, ok, _ = _run_ref_job(
+            ait, ind, out, srv, protect_proper=False,
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, tm_lite=False)
+        body = io.open(os.path.join(out, "configs", "text", "rus", "f.xml"),
+                       encoding="utf-8").read()
+        check("T58-4 整条最终不再残留Свободовцам",
+              ok and "Свободовцам" not in body and "自由团" in body,
+              body[:220])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T59 NS7 核心专名：引号 + 格变命中，通名不硬套
+# ----------------------------------------------------------------------
+def t59_ns7_core_terms():
+    print()
+    print("--- T59 NS7 核心专名/格变 ---")
+    root = tempfile.mkdtemp(prefix="ait_ns7_")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        cases = (
+            ("“Выжигателя мозгов”", "焦脑器"),
+            ("“О-Сознания”", "共同意识"),
+            ("“Чистого неба”", "晴空"),
+            ("“Последнего дня”", "末日"),
+            ("“Барьера”", "屏障"),
+            ("“Деревне новичков”", "新手村"),
+            ("“Ростока”", "罗斯托克"),
+            ("“Гюрзы”", "蝮蛇"),
+            ("“Москвича”", "莫斯科人"),
+            ("“Душу”", "灵魂"),
+            ("“Грозу”", "雷暴"),
+            ("“Сердца полтергейста”", "吵闹鬼之心"),
+            ("“Крови камня”", "石血"),
+            ("“Золотую рыбку”", "金鱼"),
+            ("“Грузовика смерти”", "死亡卡车"),
+            ("“Трамплина”", "跳板"),
+            ("“Пустышка”", "空壳"),
+            ("“Камень удачи”", "幸运石"),
+            ("“Яркая пружина”", "明亮弹簧"),
+            ("“лечебный берилл”", "治疗用绿柱石"),
+            ("“Аномальный Вал”", "异常型巨浪"),
+        )
+        for src, want in cases:
+            hits = job._glossary_hits(src)
+            check("T59 %s→%s" % (src, want),
+                  any(v.strip("“”") == want for _k, v in hits), str(hits))
+        for src in ("чувство души", "гроза надвигается",
+                    "плодородная нива", "змея гюрза",
+                    "высокий барьер", "росток дерева",
+                    "последний день отпуска", "чистое небо над зоной"):
+            hits = job._glossary_hits(src)
+            check("T59 通名不硬套：%s" % src,
+                  not any(v.strip("“”") in (
+                      "灵魂", "雷暴", "尼瓦", "蝮蛇", "屏障", "罗斯托克",
+                      "末日", "晴空") for _k, v in hits), str(hits))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T60 中文译文残留俄文时的兜底重试
+# ----------------------------------------------------------------------
+def t60_residual_cyrillic_retry():
+    print()
+    print("--- T60 残留俄文兜底 ---")
+    root = tempfile.mkdtemp(prefix="ait_resid_")
+    calls = []
+
+    def fn(text):
+        calls.append(text)
+        if len(calls) == 1:
+            return '你好，“Фыва”。'
+        return '你好，“法瓦”。'
+
+    srv = _FakeServer(fn=fn)
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        out = job._translate_one('Привет, "Фыва".', "rus")
+        check("T60-1 残留俄文触发一次重试并采用纯中文结果",
+              out == '你好，“法瓦”。' and len(calls) == 2,
+              "%r calls=%d" % (out, len(calls)))
+        clean = _FakeServer(fn=lambda _t: "你好，“禁区”。")
+        job2 = ait.TranslationJob(
+            ait._load_vendor(), clean, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out2"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        out2 = job2._translate_one('Привет, "Зона".', "rus")
+        check("T60-2 纯中文译文不触发多余重试",
+              out2 == "你好，“禁区”。" and len(clean.calls) == 1,
+              "%r calls=%d" % (out2, len(clean.calls)))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T61 术语分层全覆盖 + 百科/任务软提示
+# ----------------------------------------------------------------------
+def t61_soft_layer_coverage():
+    print()
+    print("--- T61 术语分层全覆盖/软提示 ---")
+    data = ait.load_termbase_data()
+    meta = data.get("_meta") or {}
+    cats = set((meta.get("categories") or {}).keys())
+    covered = set()
+    for layer in (meta.get("layers") or {}).values():
+        covered.update(layer)
+    check("T61-1 所有分类都在 canon/names/technical/reference 之一",
+          covered == cats, "未覆盖=%s" % sorted(cats - covered))
+    layers = ait.load_term_layers()
+    check("T61-2 四层合计等于总条数（无孤儿词条）",
+          len(layers["canon"]) + len(layers["names"])
+          + len(layers["technical"]) + len(layers["reference"])
+          == int(meta.get("total_entries") or 0),
+          "%d+%d+%d+%d vs %s"
+          % (len(layers["canon"]), len(layers["names"]),
+             len(layers["technical"]), len(layers["reference"]),
+             meta.get("total_entries")))
+    check("T61-3 百科词进入软层而非硬词",
+          "Ласточкин хвост" in layers["reference"]
+          and "Ласточкин хвост" not in layers["canon"])
+    root = tempfile.mkdtemp(prefix="ait_soft_")
+    srv = _FakeServer()
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=True, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        hits = job._glossary_hits("“Ласточкин хвост”接口")
+        check("T61-4 软层只进提示、不强制替换",
+              any(v == "燕尾槽" for _k, v in hits)
+              and not job._glossary_spans("“Ласточкин хвост”接口"),
+              str(hits))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T62 残留源词确定性替换 + 多义语境
+# ----------------------------------------------------------------------
+def t62_residual_and_ambiguity():
+    print()
+    print("--- T62 残留源词替换/多义语境 ---")
+    root = tempfile.mkdtemp(prefix="ait_resid2_")
+    calls = []
+
+    def fn(text):
+        calls.append(text)
+        return '在“Автомобилист”KSП上'
+
+    srv = _FakeServer(fn=fn)
+    try:
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=False, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        out = job._translate_one('на КСП "Автомобилист"', "rus")
+        check("T62-1 残留源词直接替换且不重试模型",
+              out == '在“旧公交”KSП上' and len(calls) == 1,
+              "%r calls=%d" % (out, len(calls)))
+        layers = ait.load_term_layers()
+        check("T62-2 Долговец 是人物软层，不是阵营硬词",
+              "Долговец" in layers["names"]
+              and "долговец" not in layers["canon"])
+        check("T62-3 Долговец 提示为纪律团成员、不强制替换",
+              any(v == "纪律团成员"
+                  for _k, v in job._glossary_hits('"Долговец"'))
+              and not job._glossary_spans('"Долговец"'))
+        check("T62-4 Свалка 只认大写地名，小写垃圾堆不硬套",
+              job._glossary_spans("Свалке")
+              and not job._glossary_spans("свалки с хламом"))
+        check("T62-5 Телепорт 只在引号内当专名",
+              any(k == "Телепорт" for _s, _e, k in
+                  job._glossary_spans('"Телепорт"'))
+              and not any(k == "Телепорт" for _s, _e, k in
+                          job._glossary_spans("Телепорт на Агропром")))
+        srv2 = _FakeServer(
+            fn=lambda _t: "安装阻尼器驱动程序 damper.sys...")
+        job2 = ait.TranslationJob(
+            ait._load_vendor(), srv2, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out2"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=False, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        out2 = job2._translate_one(
+            "Установка драйвера damper.sys...", "rus")
+        check("T62-6 拉丁文件名不被确定性替换破坏",
+              "damper.sys" in out2 and "阻尼器.sys" not in out2,
+              out2)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T63 hard 词精准化：长任务短语/长物品描述不进 hard
+# ----------------------------------------------------------------------
+def t63_hard_term_precision():
+    print()
+    print("--- T63 hard 词精准化 ---")
+    data = ait.load_termbase_data()
+    layers = ait.load_term_layers()
+    loc = data.get("地点与区域") or {}
+    item = data.get("物品·武器·装备·神器") or {}
+    bad_loc = [k for k in loc
+               if len(str(k).split()) >= 3
+               or re.match(r"^(Возможн|Предполаг|Приблизительн|Место|"
+                           r"Точка|Поиск|Possible|Location|Search|Place|"
+                           r"Steal|Bring|Drive)", str(k), re.I)]
+    bad_item = [k for k in item if len(str(k).split()) >= 5]
+    check("T63-1 地点 hard 层不再有任务描述/动作短语",
+          not bad_loc, str(bad_loc[:8]))
+    check("T63-2 物品 hard 层不再有 5 词以上长描述",
+          not bad_item, str(bad_item[:8]))
+    check("T63-3 降级条目进入 reference 软层",
+          "Возможное местонахождение наёмника" in layers["reference"]
+          and "Возможное местонахождение наёмника" not in layers["canon"]
+          and "Steal the documents" in layers["reference"]
+          and "Steal the documents" not in layers["canon"])
+    check("T63-4 核心短专名仍在 hard 层",
+          "Армейские Склады" in layers["canon"]
+          and "Деревня новичков" in layers["canon"]
+          and "Заброшенная свиноферма" in layers["canon"])
+    check("T63-5 分四层合计仍等于总数",
+          len(layers["canon"]) + len(layers["names"])
+          + len(layers["technical"]) + len(layers["reference"])
+          == int((data.get("_meta") or {}).get("total_entries") or 0))
+    check("T63-6 单字普通物品降为软提示",
+          all(k not in layers["canon"]
+              and k in layers["reference"]
+              for k in ("Записка", "Аптечка", "Детектор", "Телевизор")))
+    check("T63-7 Изоморф 修正为同形体",
+          "Изоморф" in layers["canon"]
+          and ait.load_glossary_layers()[0].get("Изоморф") == "同形体")
+    check("T63-8 通用地点词只认大写专名",
+          all(k in layers["case_sensitive"]
+              for k in ("Завод", "Болото", "Пещера", "Тоннель")))
+
+
+# ----------------------------------------------------------------------
+# T64 场景上下文/对话批处理/分场景提示/风格清理
+# ----------------------------------------------------------------------
+def t64_scene_batch_and_style():
+    print()
+    print("--- T64 场景批处理/分场景提示/风格清理 ---")
+    root = tempfile.mkdtemp(prefix="ait_scene_")
+    ind = os.path.join(root, "in")
+    out = os.path.join(root, "out")
+    os.makedirs(os.path.join(ind, "configs", "text", "dialogs"))
+    srcs = ["Привет, сталкер.", "Что тебе нужно?", "Есть работёнка.",
+            "Говори, я слушаю."]
+    with io.open(os.path.join(ind, "configs", "text", "dialogs", "d.xml"),
+                 "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write('<string_table>')
+        for i, src in enumerate(srcs):
+            f.write('<string id="d%d"><rus>%s</rus></string>' % (i, src))
+        f.write('</string_table>')
+    with io.open(os.path.join(ind, "configs", "localization.ltx"), "w",
+                 encoding="utf-8", newline=chr(10)) as f:
+        f.write("string_table".join(["", ""]) if False else
+                "[string_table]" + chr(10) + "language = rus" + chr(10)
+                + "files = d" + chr(10))
+    srv = _FakeServer(fn=lambda _t: "你好，潜行者。")
+    try:
+        job, ok, _ = _run_ref_job(
+            ait, ind, out, srv, protect_proper=False,
+            force_glossary=False, tm_lite=False)
+        body = io.open(os.path.join(out, "configs", "text", "dialogs",
+                                    "d.xml"), encoding="utf-8").read()
+        check("T64-1 连续短对话走批量请求",
+              ok and job.batch_stats["batches"] >= 1
+              and job.batch_stats["lines"] == 4
+              and body.count("你好，潜行者。") == 4,
+              str(job.batch_stats))
+        check("T64-2 分场景提示与温度选择",
+              job._entry_style("configs/text/ui/ui_x.xml", "OK") == "label"
+              and job._entry_style("configs/text/encyclopedia/e.xml",
+                                   "Длинный текст.") == "formal"
+              and job._entry_style("configs/text/dialogs/d.xml",
+                                   "Привет.") == "dialogue")
+        check("T64-3 中文去翻译腔后处理",
+              ait.style_cleanup_cn("我不得不说，并且因此...") ==
+              "说实话，而且所以……")
+        metas = [{"src": "А"}, {"src": "Б"}, {"src": "В"}]
+        ctx = job._scene_context(metas, 1)
+        check("T64-4 取前后句作场景上下文",
+              "前一句：А" in ctx and "后一句：В" in ctx, ctx)
+        check("T64-5 批量失败回退逐条",
+              job._parse_numbered_batch("没有编号", 2) is None)
+
+        class CtxServer(_FakeServer):
+            def __init__(self):
+                _FakeServer.__init__(self)
+                self.ctx = None
+                self.style = None
+
+            def translate(self, text, src, tgt, glossary_hits=None,
+                          timeout_sec=180, max_tokens=None, extra_sys=None,
+                          context=None, style=None, **kwargs):
+                self.ctx = context
+                self.style = style
+                return "你好。"
+
+        cs = CtxServer()
+        job2 = ait.TranslationJob(
+            ait._load_vendor(), cs, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out3"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=False, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False, tm_lite=False)
+        job2._translate_one("Привет, сталкер.", "rus",
+                            context="前一句：Тест", style="dialogue")
+        check("T64-6 逐条路径实际注入场景上下文和风格",
+              cs.ctx == "前一句：Тест" and cs.style == "dialogue",
+              "%r / %r" % (cs.ctx, cs.style))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# T65 英文别名补录与同形普通词降级
+# ----------------------------------------------------------------------
+def t65_english_alias_precision():
+    print()
+    print("--- T65 英文别名/同形词 ---")
+    layers = ait.load_term_layers()
+    gloss = ait.load_glossary_layers()[0]
+    check("T65-1 高置信英文物品别名已入库",
+          all(k in layers["canon"] for k in (
+              "activated bombmaker's briefcase",
+              "professor kruglov's flash drive",
+              "insane stalker's flash drive",
+              "the prisoner's flash drive",
+              "lucky's pda", "tyran's pda", "borov's key",
+              "giant's younger brother",
+              "great-grandma's beads", "grandma's beads",
+              "izomorf", "anomlaous stabilizer")))
+    check("T65-2 英文同形普通词不再 hard",
+          all(k in layers["reference"] and k not in layers["canon"]
+              for k in ("Note", "Order", "Bread", "flash", "hide",
+                        "Soul", "Military", "Flesh", "Rat", "crystal")))
+    check("T65-3 英文阵营/地名只认首字母大写",
+          all(k in layers["case_sensitive"]
+              for k in ("Duty", "Freedom", "Garbage")))
+    check("T65-4 izomorf 与俄文同形体一致",
+          gloss.get("izomorf") == "同形体")
+    check("T65-5 总条数与四层合计一致",
+          len(layers["canon"]) + len(layers["names"])
+          + len(layers["technical"]) + len(layers["reference"])
+          == int((ait.load_termbase_data().get("_meta") or {})
+                 .get("total_entries") or 0))
+
+
+# ----------------------------------------------------------------------
+# T66 英文语义定点修复：Controller / Freedom
+# ----------------------------------------------------------------------
+def t66_english_semantic_fixes():
+    print()
+    print("--- T66 英文语义定点修复 ---")
+    root = tempfile.mkdtemp(prefix="ait_ensem_")
+    cases = [
+        ("controller", "控制器", "脑波怪"),
+        ("Eliminate the leader of Freedom faction",
+         "消灭自由派团体的首领", "消灭“自由团”的首领"),
+    ]
+    try:
+        for src, draft, want in cases:
+            srv = _FakeServer(fn=lambda _t, d=draft: d)
+            job = ait.TranslationJob(
+                ait._load_vendor(), srv, root, "auto", "auto", "chs",
+                out_dir=os.path.join(root, "out"),
+                glossary=ait.load_glossary_layers()[0],
+                hard_glossary_keys=ait.load_hard_glossary_keys(),
+                force_glossary=False, reference_mode=False,
+                copy_reference=False, protect_proper=False,
+                translate_literals=False, auto_session_terms=False,
+                tm_lite=False)
+            got = job._translate_one(src, "eng")
+            check("T66 %s→%s" % (src, want), got == want,
+                  "%r calls=%d" % (got, len(srv.calls)))
+        srv = _FakeServer(fn=lambda _t: "自由派团体")
+        job = ait.TranslationJob(
+            ait._load_vendor(), srv, root, "auto", "auto", "chs",
+            out_dir=os.path.join(root, "out2"),
+            glossary=ait.load_glossary_layers()[0],
+            hard_glossary_keys=ait.load_hard_glossary_keys(),
+            force_glossary=False, reference_mode=False,
+            copy_reference=False, protect_proper=False,
+            translate_literals=False, auto_session_terms=False,
+            tm_lite=False)
+        got = job._translate_one("freedom of speech", "eng")
+        check("T66 普通 freedom 不误改", got == "自由派团体", got)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
 def main():
     for fn in (t1_encoding, t2_glossary, t3_flatten, t4_artifact, t5_pipeline,
                t6_truncation, t7_config, t8_prompt, t9_ctx, t10_classify,
@@ -2731,7 +3314,7 @@ def main():
                t42_script_context_and_english,
                t43_multiline_profanity_retry, t44_problem_file_filters,
                t45_term_layers_session_cache, t46_anthology_terms,
-               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry, t50_remove_mt15_tier, t51_output_filters, t52_session_hint_only, t53_script_display_calls, t54_credits_exact_protection, t55_english_item_audit):
+               t47_termbase_v2, t48_tm_lite, t49_placeholder_retry, t50_remove_mt15_tier, t51_output_filters, t52_session_hint_only, t53_script_display_calls, t54_credits_exact_protection, t55_english_item_audit, t56_faction_inflections, t57_faction_quote_context, t58_faction_member_cases, t59_ns7_core_terms, t60_residual_cyrillic_retry, t61_soft_layer_coverage, t62_residual_and_ambiguity, t63_hard_term_precision, t64_scene_batch_and_style, t65_english_alias_precision, t66_english_semantic_fixes):
         try:
             fn()
         except Exception as e:
