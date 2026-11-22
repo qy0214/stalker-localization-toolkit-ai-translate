@@ -4,10 +4,12 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.13（2026-11-22）**：终审 3 缺口修复——颜色码后粘连冠词剥离
-（`%c[default]The科学家`）、专名回填扩展（复数/所有格/大小写漂移/跨层）、
-词库补 10 个全系列通用词（9084→9094）。
-2.0.13/2.0.14 的全部译文修复与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
+**当前版本 1.9.17（2026-11-23）**：多源语料同步——与 2.0.20 同口径的多源
+收割（Gunslinger 人工汉化软参考层 + 垃圾过滤器、CoP 官方中文、NS2016 补缺、
+bilibili wiki 名词表、GAMMA 汉化组软参考层），词库 21074→**36323** 条；
+`termbase_lookup` casefold 归一索引 O(1)（3.656→0.125ms/次）；audit 词干
+归一加数字词保护（АКС-74У 不再误撞 АКС-74）。strict 审计 0 blocking/0 high。
+2.0.20 的全部译文修复与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -50,7 +52,7 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.16.zip` | 可直接分发的插件包 |
+| `dist/ai_translate_plugin_v1.9.17.zip` | 可直接分发的插件包 |
 | `tests/` | 346 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -58,20 +60,23 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.16`
+- 插件版本：`ai_translate 1.9.17`
 - 当前 zip SHA-256：
-  `aac799b5741a91d5de914585245a4e86175c8cfdaa336647465b384b846b8f68`
+  `79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
-- 术语规模：`glossary_builtin.json` 9059 条 / `stalker_termbase.json` 9059 条；
-  canon 1453 / names 3069 / technical 18 / reference 4519（百科/任务/界面/新闻为软提示层）
+- 术语规模：`glossary_builtin.json` 36323 条 / `stalker_termbase.json` 36323 条；
+  canon 4282 / names 3250 / technical 18 / reference 28773（Gunslinger 参考、
+  GAMMA 参考、ANTHOLOGY 参考、百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.16.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.17.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.16 变更摘要
+## 1.6.0 – 1.9.17 变更摘要
+
+- **1.9.17 多源语料同步**（2026-11-23）与 2.0.20 同口径：Gunslinger 人工汉化（configs.db 经 xrkit 解包原文，"Gunslinger 参考" 软层 5912 条 + 垃圾过滤器：载具名词误植/型号 token 漂移）＋ CoP 官方中文 1432 条（官方译名 × CoP 1.6.02 补丁包 rus/eng 解包）＋ NS2016 补缺 ＋ bilibili wiki 名词表 ＋ GAMMA 汉化组 7876 条（"GAMMA 参考" 软层，eng/rus × Anomaly 同 ID 配对）；词库 21074→36323；`termbase_lookup` casefold 归一索引 O(1)（3.656→0.125ms）；audit stemmer 数字词保护（АКС-74У 误撞 АКС-74）；strict 0 blocking/0 high，全量深度审计（tools/audit_termbase_full.py 五层）通过。
 
 - **1.9.16 词库大扩充**（2026-11-22）从 AREA 人工汉化包与 NS7 9月6日官方汉化补丁收割术语对 1.2 万+（工具 tools/harvest_termbase_from_human.py，可对任意未来人工补丁复用）；NS7 官方译名为权威冲突覆盖；引号短语键/长描述/占位符不符按审计规则剔除（收割会遮蔽组件术语查找的教训已固化进工具）；词库 9181→21074，strict 0 blocking/0 high。
 - **1.9.15**（2026-11-22）快照复核补充修复：①出口级换行对齐（280 条换行在后续闸门重试中被破坏）；②型号语境窗口 ±24→±48 + 全源兜底（AK-100→AK-74M 漏检）；③词库补 Accuracy International→精准国际。
