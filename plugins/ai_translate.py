@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.14",
+    "version": "1.9.15",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -3065,12 +3065,16 @@ def missing_model_tokens(src, out):
         seen.add(tok)
         if re.fullmatch(r"\d+", tok):
             continue
-        # 型号需紧邻引号或武器语境词，减少误报
+        # 型号需紧邻引号或武器语境词，减少误报。
+        # ★ 1.9.15：语境窗口 ±24→±48 + 全源兜底（武器描述里型号与语境词
+        # 相距很远，窄窗口漏掉 AK-100→AK-74M 的型号替换）。
         s, e = m.span()
-        near = src[max(0, s - 24):min(len(src), e + 24)]
+        near = src[max(0, s - 48):min(len(src), e + 48)]
         if not (any(q in near for q in "\"'«“”")
                 or re.search(r"rifle|pistol|gun|shotgun|carbine|weapon|ammo|"
-                             r"караб|пистол| оружи|патрон", near, re.I)):
+                             r"cartridge|sniper|caliber|series|barrel|"
+                             r"караб|пистол| оружи|патрон",
+                             near if near else src, re.I)):
             continue
         if tok not in out:
             missing.append(tok)
@@ -4604,6 +4608,14 @@ class TranslationJob(object):
             out = out.rstrip() + "（原文型号 %s）" % "、".join(miss_model[:3])
             self.detail("  型号被替换，已补回原文型号：%s"
                         % "、".join(miss_model[:3]))
+        # ★ 1.9.15 出口级换行对齐：换行闸门在流程前段，其后数字/完整性/
+        # 残留闸门的重试可能再次破坏换行（实测 marsh 背景段 4→2 行）。
+        if source_nl and out.count("\n") != source_nl:
+            realigned = restore_linebreaks(out, source_nl)
+            if realigned != out:
+                self.detail("  出口换行对齐（%d→%d）：%s"
+                            % (out.count("\n"), source_nl, str(text)[:50]))
+                out = realigned
         final = escape_newlines(out)
         # C. 字面 \n 保真：源有字面换行而译文吞成空格/多加时，按源数量对齐。
         final, nl_fixed = reconcile_literal_newlines(text, final)

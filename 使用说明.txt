@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.9.14
+插件版本：ai_translate 1.9.15
 
 
 一、怎么装（30 秒）
@@ -29,14 +29,14 @@ AI 离线翻译插件 · 分享包说明
 工具集 exe（1.1.0 build_60，历史发布物）：
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
-本插件 zip（ai_translate_plugin_v1.9.14.zip）：
-    9e1a5b90f8811bc7d139101db108074ab4e0ecb2a5dc474db36e9b5f4836f273
+本插件 zip（ai_translate_plugin_v1.9.15.zip）：
+    6d8dbe14762c306123e2773c6bd9b8f13ad9d2551b93f4bdc67076e377a56d3a
 
 PowerShell 校验：
-    Get-FileHash .\ai_translate_plugin_v1.9.14.zip -Algorithm SHA256
+    Get-FileHash .\ai_translate_plugin_v1.9.15.zip -Algorithm SHA256
 
 说明：exe 哈希取自清理前生成的发布清单；如果你手上的 exe 不是同一构建，
-请以那次发布清单为准。插件 zip 哈希对应本 1.9.14 分享包。
+请以那次发布清单为准。插件 zip 哈希对应本 1.9.15 分享包。
 插件运行时下载的 llama.cpp 运行库与模型，也会在下载后按发布方官方
 SHA-256 校验（llama.cpp b11612 GitHub Release digest / HuggingFace LFS
 oid）；不一致会删除该文件并自动换源。
@@ -109,8 +109,12 @@ oid）；不一致会删除该文件并自动换源。
 看到告警请换模型，不要硬跑（否则每条文本都会超时）。
 
 
-四点五、1.6.0 – 1.9.14 修了什么（与你直接相关）
+四点五、1.6.0 – 1.9.15 修了什么（与你直接相关）
 ----------------------------------------
+* （1.9.15）快照复核补充修复：①出口级换行对齐——后续闸门重试可能
+  再次破坏换行（实测 280 条），写回前最后一次对齐；
+  ②型号语境窗口 ±24→±48 + 全源兜底（修 AK-100→AK-74M 漏检）；
+  ③词库补 Accuracy International→精准国际。
 * （1.9.14）新译文复核的 3 处误伤/短路修复（通用型）：
   ①调试行正则误伤——FAILED 在大小写不敏感下命中叙述词 "failed"、
   teleport 命中叙事词 "teleport closer"，正常文本被整条跳过不翻；

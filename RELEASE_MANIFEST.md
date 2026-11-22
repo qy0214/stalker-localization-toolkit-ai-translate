@@ -1,29 +1,29 @@
 # AI 离线翻译插件 · 发布清单
 
-- 生成时间：`2026-11-22T20:40:40+08:00`
+- 生成时间：`2026-11-22T21:12:27+08:00`
 - 工作区：仓库根目录
 - 范围：**AI 离线翻译插件（ai_translate）**
-- Git：`main` @ `9ac64b2`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
+- Git：`main` @ `0d67247`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
 - 已跟踪文件：75 个，20.38 MB
 
 ## 1. 版本与交付物
 
 | 项 | 值 |
 |---|---|
-| 插件版本 | `1.9.14` |
-| 预期版本 | `1.9.14` |
+| 插件版本 | `1.9.15` |
+| 预期版本 | `1.9.15` |
 | 适用工具集 | `STALKER Localization Toolkit 1.1.0` |
 | 历史 exe FileVersion | `1.1.0.0` |
 
 | 角色 | 路径 | 大小 | SHA-256 | 说明 |
 |---|---|---:|---|---|
-| 插件分享副本 | `plugins\ai_translate.py` | 361.40 KB | `8931c333d5d11a197d388942f04d72cd46e88a848a809074b5195f6364769328` | 纯标准库，保留必要安全说明 |
-| 插件发布 zip | `dist\ai_translate_plugin_v1.9.14.zip` | 348.56 KB | `9e1a5b90f8811bc7d139101db108074ab4e0ecb2a5dc474db36e9b5f4836f273` | 当前发布包 |
-| 术语库（随包，只读） | `plugins\ai_translate_assets\glossary_builtin.json` | 314.53 KB | `e90e93d0ad82ad0d8950749e4eaa98b46fad2313ff3845a531d4d9b7e70a2177` | 运行时匹配的内置层 |
-| 术语基表（分类） | `plugins\ai_translate_assets\stalker_termbase.json` | 320.16 KB | `89d8713ef9b86ca52fed2c5d31d6b9a485d67945a0918559aa29b8e84cf16802` | 导入用 |
+| 插件分享副本 | `plugins\ai_translate.py` | 362.21 KB | `5e376ba44a0eceee41906366218edb7e5e9e43051a9cdcf3f19f0e8fe849945c` | 纯标准库，保留必要安全说明 |
+| 插件发布 zip | `dist\ai_translate_plugin_v1.9.15.zip` | 348.95 KB | `6d8dbe14762c306123e2773c6bd9b8f13ad9d2551b93f4bdc67076e377a56d3a` | 当前发布包 |
+| 术语库（随包，只读） | `plugins\ai_translate_assets\glossary_builtin.json` | 314.57 KB | `0d83032a7710ddded67599a9e51700af40183d628bb2fbcd73b352c463ec375a` | 运行时匹配的内置层 |
+| 术语基表（分类） | `plugins\ai_translate_assets\stalker_termbase.json` | 320.20 KB | `55089e0def831d3294aa21d34884c2df330ce102be3e9ab2d8fd64f1f98184b4` | 导入用 |
 | X-Ray 解析器 | `plugins\ai_translate_assets\xray_pkg.zip` | 7.38 KB | `2f3e1dcd4b2ce701e981d5c0f3e6c16cf17782692a5a892aa9cb1e159e63f8a6` | 解析 XML/LTX/脚本 |
 | 第三方来源声明 | `plugins\ai_translate_assets\THIRD_PARTY_NOTICES.txt` | 1.18 KB | `d971f8c84ae81732effb86d0b3bb907166e81a2c804cf85207a0427f9b929d4e` | 随包分发（上游来源与许可状态） |
-| 使用说明 | `使用说明.txt` | 29.92 KB | `ed41376ceff7f2d0949a99413cbd6ee53d65703b5c6e2facb7b077bddb588baa` | 含发布包 SHA-256 |
+| 使用说明 | `使用说明.txt` | 30.23 KB | `18d551fbd4b8f18631862a85e411c94b4ec6078ca96f30c41923350b206580ce` | 含发布包 SHA-256 |
 | 术语库处理记录 | `术语库_处理记录.md` | 17.80 KB | `d353739807c1613c292abe8833f44e7f62066f5e76dd4fe2787af540e446c8f8` | 术语口径与修剪记录 |
 | 大小写冲突清单 | `术语库_大小写冲突清单.md` | 2.14 KB | `e2a491e9edd55be5a949778583d4bc29222ec9bdaf78d2783ab4183dc94f8279` | 术语大小写冲突处理 |
 | 历史工具集 exe | `STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe` | 3.19 MB | `171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947` | 2026-10-23 清单记录；文件已在清理中移除 |
@@ -50,8 +50,8 @@
 | 检查 | 结果 | 说明 |
 |---|---|---|
 | 插件语法 | 一致 | compile() 通过 |
-| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.14 / 预期 1.9.14 |
-| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.14.zip |
+| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.15 / 预期 1.9.15 |
+| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.15.zip |
 | zip 条目 == 5 个预期文件 | 一致 | 多出：无；缺少：无 |
 | zip 不含空目录/运行库/模型/日志 | 一致 | 干净 |
 | zip 内文件 == 分享副本 | 一致 | 全部一致 |
@@ -61,24 +61,24 @@
 | 官方哈希：llama.cpp 标签 b11612 | 一致 | 源码常量 |
 | 分享包不含 bin/models/logs/downloads/config.json | 一致 | 干净 |
 | 无绝对路径/用户名泄漏 | 一致 | 未发现 |
-| 术语基表：_meta.total_entries == 实际分类合计 | 一致 | meta 9181 / 实际 9181 |
+| 术语基表：_meta.total_entries == 实际分类合计 | 一致 | meta 9182 / 实际 9182 |
 | 术语基表：_meta.categories == 实际分类条数 | 一致 | meta 分类数 11 / 实际分类数 11，差异：无 |
 | tools 术语基表 == 随包术语基表 | 一致 | 一致 |
-| 术语库：随包条目 >= 8000 | 一致 | 9181 条 |
-| 术语库：随包 >= 分类基表 | 一致 | 9181 / 9181 |
+| 术语库：随包条目 >= 8000 | 一致 | 9182 条 |
+| 术语库：随包 >= 分类基表 | 一致 | 9182 / 9182 |
 | 使用说明含 exe SHA-256 | 一致 | 171ce0028151d06b… |
-| 使用说明含当前 zip SHA-256 | 一致 | 9e1a5b90f8811bc7… |
-| 使用说明含插件版本 | 一致 | ai_translate 1.9.14 |
+| 使用说明含当前 zip SHA-256 | 一致 | 6d8dbe14762c3061… |
+| 使用说明含插件版本 | 一致 | ai_translate 1.9.15 |
 | dist 只保留当前版本 zip | 一致 | 仅当前版本 |
 
 ## 4. 术语数据规模
 
 | 文件 | 条目 |
 |---|---:|
-| `glossary_builtin.json`（随包，运行时匹配） | 9181 |
-| `stalker_termbase.json`（分类导入） | 9181 |
+| `glossary_builtin.json`（随包，运行时匹配） | 9182 |
+| `stalker_termbase.json`（分类导入） | 9182 |
 
-分类明细：阵营与组织 107、人物与军衔 3164、地点与区域 366、变异生物 79、物品·武器·装备·神器 922、任务 907、百科与术语 3094、界面与提示 349、新闻·对话·其他 27、ANTHOLOGY 参考 148、技术缩写 18
+分类明细：阵营与组织 107、人物与军衔 3164、地点与区域 366、变异生物 79、物品·武器·装备·神器 923、任务 907、百科与术语 3094、界面与提示 349、新闻·对话·其他 27、ANTHOLOGY 参考 148、技术缩写 18
 
 ## 5. 存储相关（仅插件资产）
 
@@ -95,7 +95,7 @@
 
 ```powershell
 # 校验当前插件 zip
-Get-FileHash 'dist\ai_translate_plugin_v1.9.14.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.15.zip' -Algorithm SHA256
 
 # 重新生成清单
 python tools/gen_release_manifest.py

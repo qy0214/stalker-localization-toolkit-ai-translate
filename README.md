@@ -50,7 +50,7 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.14.zip` | 可直接分发的插件包 |
+| `dist/ai_translate_plugin_v1.9.15.zip` | 可直接分发的插件包 |
 | `tests/` | 346 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -58,21 +58,22 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.14`
+- 插件版本：`ai_translate 1.9.15`
 - 当前 zip SHA-256：
-  `9e1a5b90f8811bc7d139101db108074ab4e0ecb2a5dc474db36e9b5f4836f273`
+  `6d8dbe14762c306123e2773c6bd9b8f13ad9d2551b93f4bdc67076e377a56d3a`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 9059 条 / `stalker_termbase.json` 9059 条；
   canon 1453 / names 3069 / technical 18 / reference 4519（百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.14.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.15.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.14 变更摘要
+## 1.6.0 – 1.9.15 变更摘要
 
+- **1.9.15**（2026-11-22）快照复核补充修复：①出口级换行对齐（280 条换行在后续闸门重试中被破坏）；②型号语境窗口 ±24→±48 + 全源兜底（AK-100→AK-74M 漏检）；③词库补 Accuracy International→精准国际。
 - **1.9.14**（2026-11-22）2.0.15 新译文复核的 3 处修复：①`_DEBUG_LIKE_RE` 误伤修正——`FAILED\b` 在 re.I 下命中叙述词 "failed"、`teleport\w*` 命中 "teleport closer"，正常叙事被整条跳过；②`_TITLE_LIKE_RE` 冒号前含逗号/引号的叙述句不再当标题；③占位符闸门新增第三级切短块兜底（占位符被模型破坏时不再整条保留英文）。另修 `missing_big_numbers` 集合顺序不确定。
 - **1.9.13 词库扩充**（2026-11-22）st_characters.xml 97 条人物绰号/军衔经潜行者社区资料逐条核实收录（杰格佳廖夫/祖鲁/瓦诺/洛基/苏丹/卡丹/斯纳格/夏威夷人/松鸡/布拉瓦/斯巴达克斯/豺狼等），并纠正 11 处误译（Nitro→硝基、100 Rads→辐射100、Глухарь→松鸡、Sickle→镰刀、Walrus→海象、Ashot→阿肖特、Kremen→火石、Tihiy→季希、Cherniy→黑子、Bulava→布拉瓦、Gazon→加宗）；4 组大小写/跨类冲突按审计规则修正。词库 9084→9181，strict 审计 0 blocking/0 high。
 - **1.9.13**（2026-11-22）2.0.12 完成产物终审的 3 个缺口修复（通用型）：①`clean_stuck_article` 支持颜色码后粘连冠词（`%c[default]The科学家`）；②拉丁专名回填扩展——词条层不再限于 names 层、允许复数/所有格后缀（`Whirligigs`/`Jupiter's`）与大小写漂移（re.I），小写词条以词库收录为准放行；③词库 9084→9094：补 `Circus/Duga/Skadovsk/100 Rads/Spore/Hercules（对齐既有译法大力士）/Psy-block/Nitro/Swede/Volcano`，6 个小写怪物词写入 case_sensitive，strict 审计 0 blocking/0 high。新增 test_1913_port 21 项。
