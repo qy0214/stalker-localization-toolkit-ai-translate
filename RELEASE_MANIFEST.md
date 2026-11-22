@@ -1,9 +1,9 @@
 # AI 离线翻译插件 · 发布清单
 
-- 生成时间：`2026-11-22T23:56:02+08:00`
+- 生成时间：`2026-11-23T00:05:55+08:00`
 - 工作区：仓库根目录
 - 范围：**AI 离线翻译插件（ai_translate）**
-- Git：`main` @ `0bd86c7`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
+- Git：`main` @ `09a6506`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
 - 已跟踪文件：84 个，25.91 MB
 
 ## 1. 版本与交付物
@@ -17,13 +17,13 @@
 
 | 角色 | 路径 | 大小 | SHA-256 | 说明 |
 |---|---|---:|---|---|
-| 插件分享副本 | `plugins\ai_translate.py` | 354.15 KB | `5db393f3a9d8cc521a8ad4a1ef1d303fe19ea560e8a7f2bf55cc0df30c90b299` | 纯标准库，保留必要安全说明 |
-| 插件发布 zip | `dist\ai_translate_plugin_v1.9.17.zip` | 1.32 MB | `db78de77fdd0e38c1755ac6436629d4a8729f0d2d92570e427564b13123def90` | 当前发布包 |
+| 插件分享副本 | `plugins\ai_translate.py` | 354.90 KB | `6a4a73398f78ac71158a51d0ffcaeb1fe651f471fb4868f539fc4af492a9e334` | 纯标准库，保留必要安全说明 |
+| 插件发布 zip | `dist\ai_translate_plugin_v1.9.17.zip` | 1.32 MB | `79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f` | 当前发布包 |
 | 术语库（随包，只读） | `plugins\ai_translate_assets\glossary_builtin.json` | 1.69 MB | `9fcaa43593edda4f3ef454e21fa98533c081ff692b22a9f4aea4675f3825f726` | 运行时匹配的内置层 |
 | 术语基表（分类） | `plugins\ai_translate_assets\stalker_termbase.json` | 1.69 MB | `addd1af9066154a7bcbf4974c5995f11afcec00ef3184e511416b5f64d59b1b8` | 导入用 |
 | X-Ray 解析器 | `plugins\ai_translate_assets\xray_pkg.zip` | 7.38 KB | `2f3e1dcd4b2ce701e981d5c0f3e6c16cf17782692a5a892aa9cb1e159e63f8a6` | 解析 XML/LTX/脚本 |
 | 第三方来源声明 | `plugins\ai_translate_assets\THIRD_PARTY_NOTICES.txt` | 1.18 KB | `d971f8c84ae81732effb86d0b3bb907166e81a2c804cf85207a0427f9b929d4e` | 随包分发（上游来源与许可状态） |
-| 使用说明 | `使用说明.txt` | 30.27 KB | `0d8e906ba53a54758a77aedeb6311a0851910092367e075a4ea7c1c91f34c46e` | 含发布包 SHA-256 |
+| 使用说明 | `使用说明.txt` | 30.27 KB | `f9f3a363251468256fddb1b1d39435ab69b9c904fd6bd789bb05bb393692cfb7` | 含发布包 SHA-256 |
 | 术语库处理记录 | `术语库_处理记录.md` | 17.80 KB | `d353739807c1613c292abe8833f44e7f62066f5e76dd4fe2787af540e446c8f8` | 术语口径与修剪记录 |
 | 大小写冲突清单 | `术语库_大小写冲突清单.md` | 2.14 KB | `e2a491e9edd55be5a949778583d4bc29222ec9bdaf78d2783ab4183dc94f8279` | 术语大小写冲突处理 |
 | 历史工具集 exe | `STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe` | 3.19 MB | `171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947` | 2026-10-23 清单记录；文件已在清理中移除 |
@@ -67,7 +67,7 @@
 | 术语库：随包条目 >= 8000 | 一致 | 36323 条 |
 | 术语库：随包 >= 分类基表 | 一致 | 36323 / 36323 |
 | 使用说明含 exe SHA-256 | 一致 | 171ce0028151d06b… |
-| 使用说明含当前 zip SHA-256 | 一致 | db78de77fdd0e38c… |
+| 使用说明含当前 zip SHA-256 | 一致 | 79aede3426e2e78f… |
 | 使用说明含插件版本 | 一致 | ai_translate 1.9.17 |
 | dist 只保留当前版本 zip | 一致 | 仅当前版本 |
 

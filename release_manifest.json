@@ -1,19 +1,15 @@
 {
-  "generated_at": "2026-11-22T23:56:02+08:00",
+  "generated_at": "2026-11-23T00:05:55+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "0bd86c7",
+    "commit": "09a6506",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
       "M dist/ai_translate_plugin_v1.9.17.zip",
-      " M plugins/ai_translate_assets/glossary_builtin.json",
-      " M plugins/ai_translate_assets/stalker_termbase.json",
-      " M tools/stalker_termbase.json",
-      " M tools/termbase_audit.json",
-      " M tools/termbase_audit_report.md",
+      " M plugins/ai_translate.py",
       " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\""
     ]
   },
@@ -28,16 +24,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 362645,
-      "sha256": "5db393f3a9d8cc521a8ad4a1ef1d303fe19ea560e8a7f2bf55cc0df30c90b299",
+      "size": 363414,
+      "sha256": "6a4a73398f78ac71158a51d0ffcaeb1fe651f471fb4868f539fc4af492a9e334",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
       "path": "dist\\ai_translate_plugin_v1.9.17.zip",
       "exists": true,
-      "size": 1382361,
-      "sha256": "db78de77fdd0e38c1755ac6436629d4a8729f0d2d92570e427564b13123def90",
+      "size": 1382640,
+      "sha256": "79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f",
       "note": "当前发布包"
     },
     {
@@ -77,7 +73,7 @@
       "path": "使用说明.txt",
       "exists": true,
       "size": 30995,
-      "sha256": "0d8e906ba53a54758a77aedeb6311a0851910092367e075a4ea7c1c91f34c46e",
+      "sha256": "f9f3a363251468256fddb1b1d39435ab69b9c904fd6bd789bb05bb393692cfb7",
       "note": "含发布包 SHA-256"
     },
     {
@@ -107,7 +103,7 @@
   ],
   "zip": {
     "path": "dist\\ai_translate_plugin_v1.9.17.zip",
-    "sha256": "db78de77fdd0e38c1755ac6436629d4a8729f0d2d92570e427564b13123def90",
+    "sha256": "79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -248,7 +244,7 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "db78de77fdd0e38c…"
+      "detail": "79aede3426e2e78f…"
     },
     {
       "check": "使用说明含插件版本",
@@ -324,6 +320,6 @@
   },
   "tracked": {
     "files": 84,
-    "bytes": 27163522
+    "bytes": 27163959
   }
 }
