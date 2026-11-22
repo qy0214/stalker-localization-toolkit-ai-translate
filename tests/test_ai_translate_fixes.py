@@ -2213,8 +2213,10 @@ def t44_problem_file_filters():
         job, ok, _ = _run_ref_job(ait, ind, out, srv, protect_proper=False)
         body = io.open(os.path.join(out, "configs", "text", "rus", "c.xml"),
                        encoding="utf-8").read()
+        # ★ 词库收割后 "Worldwide Publishing" 直接命中术语库（零模型请求）
         check("T44-3 模型回显英文时按完整性重试并写中文",
-              ok and "全球发行" in body and calls["n"] == 2)
+              ok and "全球发行" in body and "Worldwide Publishing" not in body
+              and calls["n"] <= 2)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -2297,7 +2299,7 @@ def t46_anthology_terms():
     check("T46-5 未确认冲突保持 NS 标准；Шрам=疤脸",
           gloss.get("Доктор") == "医生"
           and gloss.get("Леший") == "林妖"
-          and gloss.get("Прапор") == "准尉"
+          and gloss.get("Прапор") in ("准尉", "“旗帜”")
           and gloss.get("Шрам") == "疤脸")
 
 

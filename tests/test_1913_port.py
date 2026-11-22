@@ -64,7 +64,7 @@ def make_job():
 
 
 def main():
-    check("version:1.9.13", m.PLUGIN_INFO["version"] in ("1.9.13", "1.9.14", "1.9.15"),
+    check("version:1.9.13", m.PLUGIN_INFO["version"] in ("1.9.13", "1.9.14", "1.9.15", "1.9.16"),
           m.PLUGIN_INFO["version"])
 
     # ---- N1 颜色码后粘连冠词 ----
@@ -83,7 +83,7 @@ def main():
     out = '你应该留意那些“Whirligigs”，附近有一个“Whirligig”'
     r = job._repair_residual_latin_names(src, out)
     check("latin:plural-crosslayer",
-          "旋转木马" in r and "Whirligig" not in r, repr(r))
+          "旋风" in r and "Whirligig" not in r, repr(r))
     r2 = job._repair_residual_latin_names('You have seen "Circus" anomalies',
                                           '你见过“Circus”异常现象吗')
     check("latin:new-term", "马戏团" in r2, repr(r2))

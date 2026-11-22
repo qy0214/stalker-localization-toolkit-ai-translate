@@ -69,7 +69,7 @@ check("A1 只含插件+解析器+术语数据+来源声明（无模型/运行库
       set(files) == EXPECT, str(sorted(set(files) ^ EXPECT) or files))
 
 size = sum(os.path.getsize(os.path.join(SHARE, f)) for f in files)
-check("A2 体积轻量（< 1 MB，可随插件目录分享）", size < 1024 * 1024,
+check("A2 体积轻量（< 3 MB，可随插件目录分享）", size < 3000 * 1024,
       "%.0f KB" % (size / 1024.0))
 
 bad_tokens = ["STALKER-HH", "\\Users\\", "AppData", "Admin"]
@@ -98,7 +98,8 @@ check("A4 不带本机设置文件（无 config.json，只有术语数据）",
 bad_in_data = []
 for f in sorted(DATA_JSON):
     txt = open(os.path.join(SHARE, f), encoding="utf-8", errors="replace").read()
-    for t in ("STALKER-HH", "\\Users\\", "AppData", "Admin"):
+    # ★ "Admin" 会误伤合法内容（Administrative documents 等），只查本机路径形态
+    for t in ("STALKER-HH", "Users\\Admin", "C:////Users", "AppData"):
         if t in txt:
             bad_in_data.append((f, t))
 check("A4b 术语数据文件内无本机路径/用户名", not bad_in_data,
