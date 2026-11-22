@@ -42,3 +42,10 @@ Desktop.ini
 *.swp
 *~
 *.lnk
+
+# 本地工作产物（不提交）
+backup/
+.workbuddy-ai/
+sim_out/
+proper_out.txt
+dist/_zip_sha.txt

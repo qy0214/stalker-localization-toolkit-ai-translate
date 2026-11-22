@@ -219,7 +219,10 @@ def t7_number_gate():
     srv2 = ScriptedServer(["这里15,000卢布。", "这里15,000卢布。"])
     job2, _ = make_job(srv2)
     out2 = job2._translate_one(src, "rus")
-    check("T7-仍错误保留原文", out2 == src, out2)
+    # ★ 1.9.12 行为变更：数字两次重试仍错时不再整段保留俄文原文，
+    # 而是补缺失数字保留中文译文（patch_missing_numbers）。
+    check("T7-补数字保留中文译文",
+          "15,000" in out2 and "30000" in out2 and "这里" in out2, out2)
 
 
 # ---------- T8 词库条目数一致性 ----------
@@ -239,6 +242,21 @@ def t8_meta():
     check("T8-两表条目数相等", len(b) == actual, "%d vs %d" % (len(b), actual))
 
 
+# ---------- T9 无术语强制路径的 note 透传 ----------
+def t9_note_passthrough_no_term():
+    print("\n--- T9 无术语强制路径 note 透传 ---")
+    # 数字/占位符/换行闸门的重试指令全靠 note；强制术语模式若整条没命中
+    # 术语，必须仍把 note 传到引擎，否则重试永远无效、条目被保留成原文。
+    srv = ScriptedServer(["能给我一把 AK-103 吗？"])
+    job, _ = make_job(srv, force_glossary=True,
+                      glossary={"Крысолов": "捕鼠人"})
+    note = "原文数字必须逐字保留"
+    out = job._translate_plain("Can you get me an AK-103?", "eng", note=note)
+    check("T9-无术语命中仍透传 note",
+          any(note == x for x in srv.notes), str(srv.notes))
+    check("T9-译文正常返回", bool(out), out)
+
+
 def main():
     t1_context_detectors()
     t2_number_fidelity()
@@ -248,6 +266,7 @@ def main():
     t6_short_no_context()
     t7_number_gate()
     t8_meta()
+    t9_note_passthrough_no_term()
     ok = sum(1 for _, r, _ in RESULTS if r)
     print("\n==== %d/%d 通过 ====" % (ok, len(RESULTS)))
     if ok != len(RESULTS):

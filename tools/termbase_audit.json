@@ -1,8 +1,8 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 9072,
+ "total": 9084,
  "layers": {
-  "canon": 1457,
+  "canon": 1469,
   "names": 3078,
   "technical": 18,
   "reference": 4519
@@ -11,7 +11,7 @@
   "阵营与组织": 107,
   "人物与军衔": 3078,
   "地点与区域": 363,
-  "变异生物": 67,
+  "变异生物": 79,
   "物品·武器·装备·神器": 920,
   "任务": 907,
   "百科与术语": 3092,
@@ -22,7 +22,7 @@
  },
  "variants": 3,
  "case_sensitive": 73,
- "risky_latin_canon": 28,
+ "risky_latin_canon": 34,
  "quoted_keys": 158,
  "cross_layer_conflicts": 5,
  "case_conflicts": 0,
@@ -122,11 +122,13 @@
   {
    "severity": "low",
    "code": "risky_latin_canon",
-   "detail": "小写单单词拉丁 canon（运行时仅认大写专名）：28 条",
+   "detail": "小写单单词拉丁 canon（运行时仅认大写专名）：34 条",
    "samples": [
     "bar",
     "bubble",
     "clutcher",
+    "dog",
+    "dogs",
     "drifter",
     "droplets",
     "emerald",
@@ -136,14 +138,12 @@
     "gravi",
     "izomorf",
     "lift",
+    "lurker",
+    "lurkers",
     "mica",
     "oasis",
     "pellicle",
-    "porcupine",
-    "pulsar",
-    "pulse",
-    "rattle",
-    "scale"
+    "porcupine"
    ]
   },
   {
@@ -171,10 +171,17 @@
    "samples": []
   },
   {
-   "severity": "ok",
+   "severity": "medium",
    "code": "case_policy",
-   "detail": "风险拉丁词未写入 case_sensitive：0 条",
-   "samples": []
+   "detail": "风险拉丁词未写入 case_sensitive：6 条",
+   "samples": [
+    "dog",
+    "dogs",
+    "lurker",
+    "lurkers",
+    "psysucker",
+    "psysuckers"
+   ]
   },
   {
    "severity": "ok",
@@ -192,8 +199,8 @@
  "severity": {
   "blocking": 0,
   "high": 0,
-  "medium": 3,
+  "medium": 4,
   "low": 2,
-  "ok": 15
+  "ok": 14
  }
 }
