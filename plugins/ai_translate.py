@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.10",
+    "version": "1.9.11",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -634,6 +634,106 @@ _PROMPT_ECHO_MARKERS = (
 def looks_like_prompt_echo(text):
     s = text or ""
     return any(marker in s for marker in _PROMPT_ECHO_MARKERS)
+
+
+# ★ 1.9.11 场景上下文串入：模型（尤其 1.8B）会把 user prompt 前面那段
+# 「前一句/后一句」当成正文一起翻出来，连标签都照抄。这些标签绝不该出现在
+# 译文里，用固定锚点硬校验，与提示词无关。
+_CONTEXT_ECHO_MARKERS = (
+    "前一句：", "后一句：", "上一句：", "下一句：",
+    "上下文（仅供理解", "上下文(仅供理解",
+)
+
+
+def looks_like_context_echo(text):
+    s = text or ""
+    return any(marker in s for marker in _CONTEXT_ECHO_MARKERS)
+
+
+def looks_like_context_bleed(src, out):
+    """译文串入场景上下文：显式标签，或极短源文吐出超长段落。
+
+    后者兜住模型只翻了上下文正文、却没照抄「前一句：」标签的情况：
+    例如源文 `Я не готов.`（11 字符）却输出一整段上一条的译文。
+    """
+    if not out:
+        return False
+    if looks_like_context_echo(out):
+        return True
+    return len((src or "").strip()) < 24 and len((out or "").strip()) > 150
+
+
+# ★ 1.9.11 数字保真：金额/年份/坐标等大额数字绝不能被模型改写。
+# 实测 dm_lin_treasure_33 源文「30000 рублей」被译成「15,000卢布」（报酬腰斩）。
+# 只检 >=3 位的数字（<3 位多为编号/序号，且 2006-м→2006年 等屈折会误报）。
+_BIG_NUM_RE = re.compile(r"(?<![\d,.])(\d{3,})(?![\d,.])")
+_ZH_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+              "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+
+def _zh_number_values(text):
+    """把译文里的中文计数法还原成数值集合，用于核对原文大额数字。
+
+    支持：1.5万 / 3万 / 两万 / 三万 / 十五万 / 100,000 / 100 000。
+    中文汉字数字只覆盖万位以内的常见写法，够核对金额即可。
+    """
+    vals = set()
+    if not text:
+        return vals
+    # 阿拉伯数字 + 万/千（含千分位逗号、空格）
+    for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*([万千])", text):
+        try:
+            base = float(m.group(1).replace(",", ""))
+            mult = 10000 if m.group(2) == "万" else 1000
+            v = base * mult
+            vals.add(int(v) if v == int(v) else v)
+        except ValueError:
+            pass
+    # 纯汉字数字串，如 三万 / 一万五千 / 两万 / 十五万 / 一百二十五
+    # 一次性解析整串（含万/千/百/十多级），避免「一万五千」被拆成 1万+5千。
+    for m in re.finditer(r"[零〇一二两三四五六七八九十百千万]+", text):
+        seg = m.group(0)
+        total, section, num = 0, 0, 0
+        for ch in seg:
+            if ch in _ZH_DIGITS:
+                num = _ZH_DIGITS[ch]
+            elif ch in ("十", "百", "千", "万"):
+                unit = {"十": 10, "百": 100, "千": 1000, "万": 10000}[ch]
+                if ch == "万":
+                    total += (section + num or 1) * unit
+                    section, num = 0, 0
+                else:
+                    section += (num or 1) * unit
+                    num = 0
+        value = total + section + num
+        if value:
+            vals.add(value)
+    return vals
+
+
+def missing_big_numbers(src, out):
+    """源文大额数字在译文中找不到（原样/千分位/中文计数）时返回缺失列表。
+
+    找不到 = 模型改写或漏掉了关键数字（金额、年份、坐标、密码），
+    必须拦截。返回空列表表示保真通过。
+    """
+    if not src or not out:
+        return []
+    src_nums = set(_BIG_NUM_RE.findall(str(src)))
+    if not src_nums:
+        return []
+    out_nums = set(re.findall(r"\d+", re.sub(r"[,\s]", "", str(out))))
+    out_nums |= {str(int(float(x))) for x in out_nums if x.isdigit()}
+    out_vals = _zh_number_values(out)
+    missing = []
+    for n in src_nums:
+        if n in out_nums:
+            continue
+        iv = int(n)
+        if iv in out_vals or float(iv) in out_vals or iv in out_nums:
+            continue
+        missing.append(n)
+    return missing
 
 
 _RU_PROFANITY_RE = re.compile(
@@ -1519,6 +1619,73 @@ def load_termbase_data():
     _TERMBASE_CACHE["key"] = key
     _TERMBASE_CACHE["data"] = data
     return data
+
+
+# ★ 1.9.11 专名直取：库里已有的译名（БАРМЕН→酒保、ПРИЗРАК→幽灵、
+# SMS 名字表等）在"保护专名"跳过之前先精确取出，直接落盘，不再当
+# "不可译专名"原样保留。只做整串精确匹配，避免正文普通词被误换。
+_BUILTIN_FLAT_CACHE = {"key": None, "data": {}}
+
+
+def termbase_lookup(text):
+    """精确查随包术语库（分类表 + 扁平表全层），返回译名或 None。
+
+    大小写与首尾引号不敏感（SMS 名字表多为全大写，词库多为首字母大写）。
+    只做整串精确匹配，不做子串。分类表与扁平表都走 mtime 缓存——终检对
+    几千条目逐条调用，不能每次重读 350KB JSON。
+    """
+    s = (text or "").strip().strip('"\u00ab\u00bb\u201c\u201d\'')
+    if not s:
+        return None
+    low = s.casefold()
+    # 分类表：termbase 原始 structures（load_term_layers 的 canon/names 是
+    # set，只有 technical/reference 带映射），这里直接读原始表拿全量映射。
+    data = load_termbase_data()
+    for _cat, table in data.items():
+        if _cat.startswith("_") or not isinstance(table, dict):
+            continue
+        if s in table:
+            return str(table[s])
+        for k, v in table.items():
+            if str(k).casefold() == low:
+                return str(v)
+    # 扁平表（glossary_builtin.json，运行时真正用的那张），带 mtime 缓存
+    try:
+        _bst = os.stat(_GLOSS_BUILTIN)
+        _bkey = (_bst.st_mtime_ns, _bst.st_size)
+    except OSError:
+        _bkey = None
+    global _BUILTIN_FLAT_CACHE
+    if _BUILTIN_FLAT_CACHE.get("key") != _bkey:
+        _BUILTIN_FLAT_CACHE = {"key": _bkey,
+                               "data": load_builtin_glossary()}
+    flat = _BUILTIN_FLAT_CACHE.get("data") or {}
+    if s in flat:
+        return str(flat[s])
+    for k, v in flat.items():
+        if str(k).casefold() == low:
+            return str(v)
+    return None
+
+
+def termbase_exact_translation(text):
+    """整条命中术语库时返回可直接落盘的译名（含首尾引号处理），否则 None。
+
+    源文在引号内时去掉词库译名的外层引号，避免 ““自由团”” 双引号嵌套；
+    与 _inline_term_value 同口径。只处理整条精确匹配。
+    """
+    value = termbase_lookup(text)
+    if value is None:
+        return None
+    s = (text or "").strip()
+    quotes = "\"'«»“”‘’"
+    if (len(s) >= 2 and s[0] in quotes and s[-1] in quotes
+            and len(value) >= 2 and value[0] in quotes
+            and value[-1] in quotes):
+        value = value[1:-1]
+    lead = text[:len(text) - len(text.lstrip())]
+    trail = text[len(text.rstrip()):]
+    return lead + value + trail
 
 
 def _layer_categories(meta, name):
@@ -2823,7 +2990,14 @@ def looks_like_proper_text(rel, text):
             or _MODEL_LIKE_RE.match(s)):
         return True
     if len(s) <= 20 and s.isupper() and any(c.isalpha() for c in s):
-        return True
+        # ★ 1.9.11：只保护拉丁字母的型号/缩写（NVIDIA DLSS、AK-74）。
+        # 西里尔全大写短名（БАРМЕН、ПРИЗРАК、ЗВЕРОБОЙ…）在人物表/SMS
+        # 名字表里是**普通身份称呼**，旧规则把它们整批原样保留、连模型
+        # 都不调用。这里放行为"不自动保护"：调用方先用 termbase_lookup
+        # 取库里既有译名，没有的送模型翻译。
+        if re.search(r"[A-Za-z]", s):
+            return True
+        return False
     return False
 
 
@@ -3862,7 +4036,13 @@ class TranslationJob(object):
         校验失败（模型改了/丢了 `$name`、`%s`、`\n` 等）时**保留原文**，
         绝不把坏译文写进文本表。这是硬约束，不依赖提示词。
         """
-        self._ctx_hint = context or ""
+        # ★ 1.9.11 源头减险：极短条目（<12 字符，如 "Я не готов."）不注入
+        # 场景上下文。这类条目几乎没有正文压住 prompt 前面的「前一句：…」，
+        # 1.8B 小模型最容易把上下文整段当正文翻出（实测 bar_arena_man_job_172
+        # 被上一条的长译文覆盖）。阈值只取最危险的极短串，正常短对话仍保留
+        # 上下文帮助消歧；其余污染由下面的 bleed 检测+去上下文重试兜住。
+        self._ctx_hint = "" if len((text or "").strip()) < 12 \
+            else (context or "")
         self._style_hint = style or "dialogue"
         if lang in ("auto", "text"):
             lang = detect_text_lang(text) or self._lang_hint or "rus"
@@ -3906,6 +4086,30 @@ class TranslationJob(object):
         if looks_like_prompt_echo(out):
             self.detail("  模型回显提示词，保留原文：%s" % str(text)[:60])
             return text
+        # ★ 1.9.11 上下文串入闸门：模型把「前一句/后一句」上下文当正文翻出，
+        # 或极短源文吐出超长段落（上一条译文）。这些标签/段落绝不属于本条
+        # 译文。去掉上下文重译一次（清 _ctx_hint，否则重试仍带同一上下文）；
+        # 仍异常则保留原文，绝不把相邻条目的译文写进本条。
+        if looks_like_context_bleed(normalized, out):
+            self.detail("  上下文串入译文，去掉上下文重译：%s"
+                        % str(text)[:60])
+            self._ctx_hint = ""
+            try:
+                if mapping:
+                    retry_raw = self._translate_plain(masked, lang)
+                    retry_ctx = restore_runtime_tokens(retry_raw, mapping)
+                else:
+                    retry_ctx = self._translate_plain(normalized, lang)
+            except Exception:
+                retry_ctx = None
+            if retry_ctx and not looks_like_prompt_echo(retry_ctx) \
+                    and not looks_like_context_bleed(normalized, retry_ctx):
+                self.detail("  去上下文重译成功：%s" % str(text)[:50])
+                out = retry_ctx
+            else:
+                self.detail("  去上下文重译仍异常，保留原文：%s"
+                            % str(text)[:60])
+                return text
         # 残留源词确定性替换：模型把专名原样保留时，直接按词库换掉；
         # 不调用模型，也不改动句子其它部分。替换后再看是否还残留俄文。
         out = self._repair_residual_source_terms(normalized, out)
@@ -3941,6 +4145,40 @@ class TranslationJob(object):
                 else:
                     self.detail("  换行数与原文不一致（%d→%d），保留首次译文"
                                 % (source_nl, out.count("\n")))
+        # ★ 1.9.11 数字保真闸门：源文的大额数字（金额/年份/坐标/密码）必须在
+        # 译文中原样出现（含千分位或中文万/千计数）。实测源文 30000 卢布被
+        # 译成 15,000，报酬腰斩。带“逐字保留数字”要求重试一次；仍缺则保留
+        # 原文——错误的金额比未翻译的俄文更有害，原文至少不会误导玩家。
+        # 仅当目标语言是中文时校验（译为英文等不存在中文计数换算问题）。
+        if self.tgt in ("chs", "zh", "zh-CN", "zh-Hans") \
+                or "中文" in str(self.tgt):
+            _missed = missing_big_numbers(normalized, out)
+            if _missed:
+                self.detail("  译文大额数字缺失/被改（%s），按逐字保留重试：%s"
+                            % (",".join(_missed[:4]), str(text)[:50]))
+                note = ("原文中的数字（尤其是金额、年份、坐标、密码）必须"
+                        "逐字保留，不得换算、四舍五入或改写；"
+                        "例如 30000 就写 30000，不要写成其它数字。")
+                try:
+                    if mapping:
+                        retry_raw = self._translate_plain(
+                            masked, lang, note=note)
+                        retry_num = restore_runtime_tokens(retry_raw, mapping)
+                    else:
+                        retry_num = self._translate_plain(
+                            normalized, lang, note=note)
+                except Exception:
+                    retry_num = None
+                still = missing_big_numbers(normalized, retry_num) \
+                    if retry_num else _missed
+                if retry_num and not looks_like_prompt_echo(retry_num) \
+                        and not still:
+                    self.detail("  数字保真重试成功：%s" % str(text)[:50])
+                    out = retry_num
+                else:
+                    self.detail("  数字保真重试仍缺失（%s），保留原文：%s"
+                                % (",".join(still[:4]), str(text)[:50]))
+                    return text
         # 粗口保真闸门：原文有脏话/辱骂/威胁，译文却完全软化时，带
         # “保留同等力度”的补充要求重试一次；仍软化则保留第一次结果。
         if has_source_profanity(normalized) and not has_zh_profanity(out):
@@ -5171,6 +5409,15 @@ class TranslationJob(object):
                 continue
             if self.only_referenced and ent.id not in self._ref_counts:
                 continue
+            # ★ 1.9.11 术语优先：整条命中随包词库（БАРМЕН→酒保等）直接取译名，
+            # 不再当"不可译专名"跳过；库里没有的才走保护判定/模型。
+            # 用户/会话词库已给译名时不介入——尊重用户选择与保护专名语义。
+            _exact = termbase_exact_translation(src) \
+                if src not in self.glossary else None
+            if _exact is not None and _exact != src:
+                changes[ent.id] = (lang, _exact)
+                st["translated"] += 1
+                continue
             if self.protect_proper and looks_like_proper_text(rel, src):
                 st["skipped"] += 1
                 continue
@@ -5855,6 +6102,14 @@ class TranslationJob(object):
             if looks_like_code_or_debug(rel, send):
                 continue
             if looks_like_identifier_text(send):
+                continue
+            # ★ 1.9.11 术语直取只用于 UTF-8 文本表；按 cp1251 写回的脚本
+            # 塞中文译名会 UnicodeEncodeError，交给模型走转码路径。
+            _exact = termbase_exact_translation(send) \
+                if send not in self.glossary and enc.lower() in (
+                    "utf-8", "utf8", "utf-8-sig") else None
+            if _exact is not None and _exact != send:
+                rep[send] = _exact
                 continue
             if self.protect_proper and looks_like_proper_text(rel, send):
                 continue

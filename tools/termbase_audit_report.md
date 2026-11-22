@@ -1,8 +1,8 @@
 # 标准术语库 v2 质量审计
 
 - 生成：`tools/audit_termbase.py`
-- 术语库：`9059` 条；canon `1453`、names `3069`、technical `18`、reference `4519`
-- 严重度：blocking 0 / high 0 / medium 2 / low 2 / ok 16
+- 术语库：`9072` 条；canon `1457`、names `3078`、technical `18`、reference `4519`
+- 严重度：blocking 0 / high 0 / medium 3 / low 2 / ok 15
 
 ## 结论
 
@@ -18,7 +18,7 @@
 | ok | `case_conflict` | 仅大小写/ё 不同且译文冲突：0 组 |
 | ok | `empty` | 空原文/空译文：0 条 |
 | ok | `cjk_source` | 原文含中文：0 条 |
-| ok | `target_no_cjk` | 非技术层译文不含中文：0 条 |
+| medium | `target_no_cjk` | 非技术层译文不含中文：1 条 |
 | low | `identity` | 非技术层原文=译文：1 条 |
 | ok | `placeholder` | 占位符集合不一致：0 条 |
 | ok | `sentence_in_canon` | canon 层疑似长句/带句末标点：0 条 |
@@ -43,6 +43,12 @@
 'burner' -> [('百科与术语', '"Burner"', '“炙烤”'), ('百科与术语', 'Burner', '燃烧器')]
 ```
 
+### target_no_cjk 样例
+
+```text
+('地点与区域', 'Х-8', 'X-8')
+```
+
 ### inflection_cross_cat 样例
 
 ```text
@@ -53,4 +59,4 @@
 
 - 语义误译（同名不同人、同词不同语境）只能靠人工/语境抽查；
 - 带引号的 158 条词条与不带引号的同名词条是不同源串，审计不把它们合并；
-- names 层 3069 条只做整条精确/首字母大写提示，不进入强制替换。
+- names 层 3078 条只做整条精确/首字母大写提示，不进入强制替换。

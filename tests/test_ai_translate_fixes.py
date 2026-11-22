@@ -2314,9 +2314,11 @@ def t47_termbase_v2():
           meta.get("format") == "stalker-toolkit-termbase/2"
           and meta.get("layers", {}).get("canon")
           and meta.get("layers", {}).get("technical"))
-    check("T47-2 四层规模：canon 1453 / names 3069 / technical 18",
-          len(layers["canon"]) == 1453
-          and len(layers["names"]) == 3069
+    # 1.9.11 起词库会按需扩充（专名校正），断言改为"不低于基线 + 量级合理"，
+    # 避免写死数字导致每次入库都失效。
+    check("T47-2 四层规模：canon>=1453 / names>=3069 / technical==18",
+          len(layers["canon"]) >= 1453 and len(layers["canon"]) < 5000
+          and len(layers["names"]) >= 3069 and len(layers["names"]) < 10000
           and len(layers["technical"]) == 18,
           "%d/%d/%d" % (len(layers["canon"]), len(layers["names"]),
                         len(layers["technical"])))

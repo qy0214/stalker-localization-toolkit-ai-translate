@@ -4,9 +4,10 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.10（2026-10-31）**：英文语义定点修复 —— `controller→脑波怪`、
-`Freedom faction→“自由团”` 在英文源里按词形修正；英文别名精准化与
-场景批处理/上下文/风格后处理保持不变。完整变更见下文。
+**当前版本 1.9.11（2026-11-22）**：回移 2.X 平台已验证的三类翻译完整性修复
+——上下文串入防护、数字保真闸门（金额不被腰斩）、专名词库校正与直取。
+英文语义定点修复（`controller→脑波怪`、`Freedom faction→“自由团”`）、
+英文别名精准化与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -49,7 +50,7 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.10.zip` | 可直接分发的插件包 |
+| `dist/ai_translate_plugin_v1.9.11.zip` | 可直接分发的插件包 |
 | `tests/` | 346 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -57,7 +58,7 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.10`
+- 插件版本：`ai_translate 1.9.11`
 - 当前 zip SHA-256：
   `a25e59463ea8f4e4e551e728949a8c2057e5056cf75f0e74c554b30323a3760f`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
@@ -65,13 +66,14 @@ STALKER Localization Toolkit 1.1.0\
   canon 1453 / names 3069 / technical 18 / reference 4519（百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.10.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.11.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.10 变更摘要
+## 1.6.0 – 1.9.11 变更摘要
 
+- **1.9.11**（2026-11-22）回移 2.X 平台已验证的三类翻译完整性修复：①上下文串入防护——极短条目不注入「前一句/后一句」场景上下文、译文出现上下文标签或极短源吐超长段落时去上下文重译、仍异常保留原文；②数字保真闸门——原文大额数字（金额/年份/坐标）须在译文原样/千分位/中文万计数出现，否则带逐字保留要求重试、仍缺保留原文（拦住实测「30000卢布→15000」报酬腰斩）；③专名词库校正与直取——修正 Крысолов→捕鼠人、Борова→博罗夫、Гном→格诺姆，新增 Корефан/Калугин/100 Рентген/Х-8/ХолодМаш 等 13 条，并对整条命中的词库条目直接落盘、西里尔全大写短名不再被误当专名跳过；total_entries 9059→9072。新增 test_1911_port 59 项回归。
 - **1.9.10**：英文源语义定点修复 —— 源文出现 `controller/controllers` 时，
   把译文“控制器/控制者”改为“脑波怪”；源文出现首字母大写 `Freedom` 或
   `Freedom faction` 时，把“自由派团体/势力/派别/阵营/组织”改为“自由团”；

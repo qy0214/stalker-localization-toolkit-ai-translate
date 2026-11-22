@@ -1,16 +1,16 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 9059,
+ "total": 9072,
  "layers": {
-  "canon": 1453,
-  "names": 3069,
+  "canon": 1457,
+  "names": 3078,
   "technical": 18,
   "reference": 4519
  },
  "categories": {
   "阵营与组织": 107,
-  "人物与军衔": 3069,
-  "地点与区域": 359,
+  "人物与军衔": 3078,
+  "地点与区域": 363,
   "变异生物": 67,
   "物品·武器·装备·神器": 920,
   "任务": 907,
@@ -70,10 +70,16 @@
    "samples": []
   },
   {
-   "severity": "ok",
+   "severity": "medium",
    "code": "target_no_cjk",
-   "detail": "非技术层译文不含中文：0 条",
-   "samples": []
+   "detail": "非技术层译文不含中文：1 条",
+   "samples": [
+    [
+     "地点与区域",
+     "Х-8",
+     "X-8"
+    ]
+   ]
   },
   {
    "severity": "low",
@@ -186,8 +192,8 @@
  "severity": {
   "blocking": 0,
   "high": 0,
-  "medium": 2,
+  "medium": 3,
   "low": 2,
-  "ok": 16
+  "ok": 15
  }
 }
