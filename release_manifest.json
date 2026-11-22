@@ -1,33 +1,20 @@
 {
-  "generated_at": "2026-11-22T23:48:46+08:00",
+  "generated_at": "2026-11-22T23:56:02+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "3db9a03",
+    "commit": "0bd86c7",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
-      " D dist/ai_translate_plugin_v1.9.16.zip",
-      " M plugins/ai_translate.py",
+      "M dist/ai_translate_plugin_v1.9.17.zip",
       " M plugins/ai_translate_assets/glossary_builtin.json",
       " M plugins/ai_translate_assets/stalker_termbase.json",
-      " M tests/test_1912_port.py",
-      " M tests/test_share_package.py",
-      " M tools/audit_termbase.py",
       " M tools/stalker_termbase.json",
       " M tools/termbase_audit.json",
       " M tools/termbase_audit_report.md",
-      " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\"",
-      "?? dist/ai_translate_plugin_v1.9.17.zip",
-      "?? docs/",
-      "?? tools/DIAG_20261122.md",
-      "?? tools/analyze_iwp_output.py",
-      "?? tools/audit_iwp_deep.py",
-      "?? tools/audit_iwp_format.py",
-      "?? tools/sim_context_bleed_2808.py",
-      "?? tools/sim_random10_1911.py",
-      "?? tools/sim_translate_gamedata.py"
+      " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\""
     ]
   },
   "versions": {
@@ -49,24 +36,24 @@
       "role": "插件发布 zip",
       "path": "dist\\ai_translate_plugin_v1.9.17.zip",
       "exists": true,
-      "size": 1225200,
-      "sha256": "f0a09627a96b50bb9cee94f596309b38569b62c39ad668f64d2964b4a632eef0",
+      "size": 1382361,
+      "sha256": "db78de77fdd0e38c1755ac6436629d4a8729f0d2d92570e427564b13123def90",
       "note": "当前发布包"
     },
     {
       "role": "术语库（随包，只读）",
       "path": "plugins\\ai_translate_assets\\glossary_builtin.json",
       "exists": true,
-      "size": 1546474,
-      "sha256": "e53c2a83d2e01ba987f16ab0821b00cc552292fb974b68343a597e0f00267009",
+      "size": 1767396,
+      "sha256": "9fcaa43593edda4f3ef454e21fa98533c081ff692b22a9f4aea4675f3825f726",
       "note": "运行时匹配的内置层"
     },
     {
       "role": "术语基表（分类）",
       "path": "plugins\\ai_translate_assets\\stalker_termbase.json",
       "exists": true,
-      "size": 1552893,
-      "sha256": "8fa300bb7708084ce48d06ff06c68487235a886560df476f654c01fa3b166192",
+      "size": 1773815,
+      "sha256": "addd1af9066154a7bcbf4974c5995f11afcec00ef3184e511416b5f64d59b1b8",
       "note": "导入用"
     },
     {
@@ -90,7 +77,7 @@
       "path": "使用说明.txt",
       "exists": true,
       "size": 30995,
-      "sha256": "bc62a10af9b6858e63ba4700bd7da82224349ea76de76164634177df8c105a16",
+      "sha256": "0d8e906ba53a54758a77aedeb6311a0851910092367e075a4ea7c1c91f34c46e",
       "note": "含发布包 SHA-256"
     },
     {
@@ -120,7 +107,7 @@
   ],
   "zip": {
     "path": "dist\\ai_translate_plugin_v1.9.17.zip",
-    "sha256": "f0a09627a96b50bb9cee94f596309b38569b62c39ad668f64d2964b4a632eef0",
+    "sha256": "db78de77fdd0e38c1755ac6436629d4a8729f0d2d92570e427564b13123def90",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -231,7 +218,7 @@
     {
       "check": "术语基表：_meta.total_entries == 实际分类合计",
       "ok": true,
-      "detail": "meta 32706 / 实际 32706"
+      "detail": "meta 36323 / 实际 36323"
     },
     {
       "check": "术语基表：_meta.categories == 实际分类条数",
@@ -246,12 +233,12 @@
     {
       "check": "术语库：随包条目 >= 8000",
       "ok": true,
-      "detail": "32706 条"
+      "detail": "36323 条"
     },
     {
       "check": "术语库：随包 >= 分类基表",
       "ok": true,
-      "detail": "32706 / 32706"
+      "detail": "36323 / 36323"
     },
     {
       "check": "使用说明含 exe SHA-256",
@@ -261,7 +248,7 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "f0a09627a96b50bb…"
+      "detail": "db78de77fdd0e38c…"
     },
     {
       "check": "使用说明含插件版本",
@@ -275,8 +262,8 @@
     }
   ],
   "term_data": {
-    "glossary_entries": 32706,
-    "termbase_entries": 32706,
+    "glossary_entries": 36323,
+    "termbase_entries": 36323,
     "termbase_categories": {
       "阵营与组织": 107,
       "人物与军衔": 3250,
@@ -290,9 +277,9 @@
       "ANTHOLOGY 参考": 148,
       "技术缩写": 18,
       "Gunslinger 参考": 5912,
-      "GAMMA 参考": 4259
+      "GAMMA 参考": 7876
     },
-    "termbase_meta_total": 32706
+    "termbase_meta_total": 36323
   },
   "storage": [
     {
@@ -336,7 +323,7 @@
     "note": "2026-10-23 清单记录；文件已在清理中移除"
   },
   "tracked": {
-    "files": 75,
-    "bytes": 25046829
+    "files": 84,
+    "bytes": 27163522
   }
 }

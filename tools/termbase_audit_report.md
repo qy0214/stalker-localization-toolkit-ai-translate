@@ -1,7 +1,7 @@
 # 标准术语库 v2 质量审计
 
 - 生成：`tools/audit_termbase.py`
-- 术语库：`32706` 条；canon `4282`、names `3250`、technical `18`、reference `25156`
+- 术语库：`36323` 条；canon `4282`、names `3250`、technical `18`、reference `28773`
 - 严重度：blocking 0 / high 0 / medium 4 / low 2 / ok 14
 
 ## 结论

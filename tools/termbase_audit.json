@@ -1,11 +1,11 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 32706,
+ "total": 36323,
  "layers": {
   "canon": 4282,
   "names": 3250,
   "technical": 18,
-  "reference": 25156
+  "reference": 28773
  },
  "categories": {
   "阵营与组织": 107,
@@ -20,7 +20,7 @@
   "ANTHOLOGY 参考": 148,
   "技术缩写": 18,
   "Gunslinger 参考": 5912,
-  "GAMMA 参考": 4259
+  "GAMMA 参考": 7876
  },
  "variants": 3,
  "case_sensitive": 81,
