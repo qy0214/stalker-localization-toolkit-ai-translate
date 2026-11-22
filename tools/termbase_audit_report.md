@@ -1,8 +1,8 @@
 # 标准术语库 v2 质量审计
 
 - 生成：`tools/audit_termbase.py`
-- 术语库：`9084` 条；canon `1469`、names `3078`、technical `18`、reference `4519`
-- 严重度：blocking 0 / high 0 / medium 4 / low 2 / ok 14
+- 术语库：`9094` 条；canon `1474`、names `3081`、technical `18`、reference `4521`
+- 严重度：blocking 0 / high 0 / medium 3 / low 2 / ok 15
 
 ## 结论
 
@@ -29,7 +29,7 @@
 | ok | `technical_mismatch` | 技术词译文与插件常量不一致：0 条 |
 | ok | `variant_target` | 变体映射指向不存在的词条：0 条 |
 | ok | `variant_value` | 变体与规范词条译文不同：0 条 |
-| medium | `case_policy` | 风险拉丁词未写入 case_sensitive：6 条 |
+| ok | `case_policy` | 风险拉丁词未写入 case_sensitive：0 条 |
 | ok | `copy_sync` | 工具库与随包副本：plugins\ai_translate_assets\stalker_termbase.json=一致 |
 | ok | `builtin_sync` | glossary_builtin.json 与分类库摊平结果：一致 |
 
@@ -55,19 +55,8 @@
 地点与区域:Генераторы→焦脑器 / 物品·武器·装备·神器:Генератор→干扰器
 ```
 
-### case_policy 样例
-
-```text
-dog
-dogs
-lurker
-lurkers
-psysucker
-psysuckers
-```
-
 ## 已知边界（不是本轮能自动证明的）
 
 - 语义误译（同名不同人、同词不同语境）只能靠人工/语境抽查；
 - 带引号的 158 条词条与不带引号的同名词条是不同源串，审计不把它们合并；
-- names 层 3078 条只做整条精确/首字母大写提示，不进入强制替换。
+- names 层 3081 条只做整条精确/首字母大写提示，不进入强制替换。

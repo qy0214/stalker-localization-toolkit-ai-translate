@@ -74,7 +74,7 @@ def make_job():
 
 def main():
     # ---- 版本 ----
-    check("version:1.9.12", m.PLUGIN_INFO["version"] == "1.9.12",
+    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13"),
           m.PLUGIN_INFO["version"])
 
     # ---- 英文粗口（#5）----

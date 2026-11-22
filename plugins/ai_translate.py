@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.12",
+    "version": "1.9.13",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -2907,15 +2907,18 @@ def clean_injected_bullets(src, out):
 
 
 # 冠词粘连：小模型偶尔把英文冠词 An/A/The 贴在中文译文前（"An神器..."）。
-# 只在词首紧邻 CJK 时剥离，避免误伤真正的英文混排。
-_LEADING_ARTICLE_RE = re.compile(r"^(?:An|A|The)(?=[\u4e00-\u9fff])", re.I)
+# ★ 1.9.13：冠词不只出现在行首——颜色码后也会紧贴中文（实测
+# %c[default]The科学家）。匹配「行首或颜色码之后」，替换保留颜色码。
+_LEADING_ARTICLE_RE = re.compile(
+    r"(%c\[[^\]]*\]|^)(?:An|A|The)(?=[\u4e00-\u9fff])", re.I)
 
 
 def clean_stuck_article(out):
-    """剥离紧贴译文首字的英文冠词，返回 (文本, 是否改动)。"""
+    """剥离紧贴中文译文的英文冠词（行首/颜色码后），返回 (文本, 是否改动)。"""
     if not out:
         return out, False
-    cleaned = _LEADING_ARTICLE_RE.sub("", out, count=1)
+    cleaned = _LEADING_ARTICLE_RE.sub(lambda m: m.group(1) or "", out,
+                                      count=1)
     return cleaned, cleaned != out
 
 
@@ -4706,6 +4709,11 @@ class TranslationJob(object):
         - 词长 >= 4 且首字母大写（或是含空格的多词人名），排除纯技术码；
         - 排除含数字/点/斜杠的型号、路径、扩展名；
         - 词边界锚定，只替换译文里仍以原英文形态残留的（已译的不动）。
+        ★ 1.9.13 两处扩展：
+        - 词条层不再限于 names 层：异常/地点/物品等专名（whirligig→旋转木马）
+          同样回填，防误伤由「译名含中文 + 首字母大写 + 词边界」继续保证；
+        - 允许复数/所有格后缀（Whirligigs / Jupiter’s）与大小写漂移：
+          中文无复数，整体替换为译名，后缀一并吃掉。
         """
         if not src or not out or self.gloss is None or not self.gloss_names:
             return out
@@ -4715,15 +4723,16 @@ class TranslationJob(object):
             return out
         quotes = "\"'«»“”‘’"
         for start, end, key in spans:
-            if key not in self.gloss_names:
-                continue
             term = src[start:end]
             if len(term) < 4:
                 continue
-            # 拉丁专名：全 ASCII 字母/空格/连字符，首字母大写；排除技术码
+            # 拉丁专名：全 ASCII 字母/空格/连字符；排除技术码
             if not re.fullmatch(r"[A-Za-z][A-Za-z'’\- ]*", term):
                 continue
-            if not (term[0].isupper() or " " in term):
+            # ★ 1.9.13：首字母小写也放行——只要词库刻意收录了该小写词条
+            # （如 whirligig→旋转木马），说明它是专名而非普通词。
+            if not (term[0].isupper() or " " in term
+                    or (key[:1] and key[0].islower())):
                 continue
             value = self.glossary.get(key)
             if value is None:
@@ -4735,12 +4744,14 @@ class TranslationJob(object):
             if (self._inside_quotes(src, start, end) and len(v) >= 2
                     and v[0] in quotes and v[-1] in quotes):
                 v = v[1:-1]
+            # ★ 1.9.13 允许可选复数/所有格后缀（中文无复数，整体替换）；
+            # 模型常改变专名大小写（源 whirligig → 译 Whirligigs），用 re.I。
+            pat_str = (r"(?<![A-Za-z])%s(?:s|’s|'s)?(?![A-Za-z])"
+                       % re.escape(term))
             # 只替换译文里仍以原英文形态残留的（词边界）
-            if not re.search(r"(?<![A-Za-z])%s(?![A-Za-z])"
-                             % re.escape(term), out):
+            if not re.search(pat_str, out, re.I):
                 continue
-            pattern = re.compile(
-                r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(term))
+            pattern = re.compile(pat_str, re.I)
             out2 = pattern.sub(lambda _m: v, out)
             if out2 != out:
                 self.detail("  残留英文专名按词库替换：%s → %s"

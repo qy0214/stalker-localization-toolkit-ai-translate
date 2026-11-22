@@ -4,10 +4,10 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.12（2026-11-22）**：回移 2.X 平台 v2.0.13/2.0.14 全部译文修复
-——整段漏译第三级兜底、圆点注入净化、写回空白保真、句中英文专名回填、
-型号/年份篡改拦截、补数字保留译文、字面 \n 保真与中文标点规范化等 10 项。
-英文语义定点修复与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
+**当前版本 1.9.13（2026-11-22）**：终审 3 缺口修复——颜色码后粘连冠词剥离
+（`%c[default]The科学家`）、专名回填扩展（复数/所有格/大小写漂移/跨层）、
+词库补 10 个全系列通用词（9084→9094）。
+2.0.13/2.0.14 的全部译文修复与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -50,7 +50,7 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.12.zip` | 可直接分发的插件包 |
+| `dist/ai_translate_plugin_v1.9.13.zip` | 可直接分发的插件包 |
 | `tests/` | 346 项回归测试 + 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -58,21 +58,22 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.12`
+- 插件版本：`ai_translate 1.9.13`
 - 当前 zip SHA-256：
-  `034776f5a9b919b877df065661f31cb45e8a9557190211e0fa32514efcb138c3`
+  `beb1f20d2ad6017a7cd784cde28a3e7d90371fd6038a7b4b2712a96a3a2bea2e`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 9059 条 / `stalker_termbase.json` 9059 条；
   canon 1453 / names 3069 / technical 18 / reference 4519（百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.12.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.13.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.12 变更摘要
+## 1.6.0 – 1.9.13 变更摘要
 
+- **1.9.13**（2026-11-22）2.0.12 完成产物终审的 3 个缺口修复（通用型）：①`clean_stuck_article` 支持颜色码后粘连冠词（`%c[default]The科学家`）；②拉丁专名回填扩展——词条层不再限于 names 层、允许复数/所有格后缀（`Whirligigs`/`Jupiter's`）与大小写漂移（re.I），小写词条以词库收录为准放行；③词库 9084→9094：补 `Circus/Duga/Skadovsk/100 Rads/Spore/Hercules（对齐既有译法大力士）/Psy-block/Nitro/Swede/Volcano`，6 个小写怪物词写入 case_sensitive，strict 审计 0 blocking/0 high。新增 test_1913_port 21 项。
 - **1.9.12**（2026-11-22）回移 2.X 平台 v2.0.13/2.0.14 全部译文修复（通用型，不针对单一 MOD）：①整段漏译第三级兜底——完整性闸门重试仍无中文时强制切 ≤100 字符短块逐块翻译；②圆点注入净化与「An神器」粘连冠词剥离（零模型请求）；③写回空白保真——源 `<text>` 前导/尾随缩进套回译文；④句中英文专名按词库回填（Nimble→机灵鬼、Sidorovich→西德洛维奇，严格排除通用词/型号）；⑤型号/年份篡改拦截——年份区间只豁免尾年、新增型号 token 保真（FNX-45→P220 会被确定性补回）；⑥数字缺失改补数字保留译文，不再整段回退原文；⑦字面 \n 数量保真与中文标点规范化；⑧英文粗口检测补齐；⑨通用新闻句式直取（We were attacked by a X，名词查词库）；⑩对话批量在强制术语下恢复（硬术语条目仍逐条）、TM 复用门槛 20%→8%、输出 token 按输入长度动态估算；词库 9072→9084。新增 test_1912_port 57 项回归。
 - **1.9.11**（2026-11-22）回移 2.X 平台已验证的三类翻译完整性修复：①上下文串入防护——极短条目不注入「前一句/后一句」场景上下文、译文出现上下文标签或极短源吐超长段落时去上下文重译、仍异常保留原文；②数字保真闸门——原文大额数字（金额/年份/坐标）须在译文原样/千分位/中文万计数出现，否则带逐字保留要求重试、仍缺保留原文（拦住实测「30000卢布→15000」报酬腰斩）；③专名词库校正与直取——修正 Крысолов→捕鼠人、Борова→博罗夫、Гном→格诺姆，新增 Корефан/Калугин/100 Рентген/Х-8/ХолодМаш 等 13 条，并对整条命中的词库条目直接落盘、西里尔全大写短名不再被误当专名跳过；total_entries 9059→9072。新增 test_1911_port 59 项回归。
 - **1.9.10**：英文源语义定点修复 —— 源文出现 `controller/controllers` 时，

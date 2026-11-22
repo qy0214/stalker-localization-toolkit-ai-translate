@@ -1,27 +1,27 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 9084,
+ "total": 9094,
  "layers": {
-  "canon": 1469,
-  "names": 3078,
+  "canon": 1474,
+  "names": 3081,
   "technical": 18,
-  "reference": 4519
+  "reference": 4521
  },
  "categories": {
   "阵营与组织": 107,
-  "人物与军衔": 3078,
-  "地点与区域": 363,
+  "人物与军衔": 3081,
+  "地点与区域": 366,
   "变异生物": 79,
-  "物品·武器·装备·神器": 920,
+  "物品·武器·装备·神器": 922,
   "任务": 907,
-  "百科与术语": 3092,
+  "百科与术语": 3094,
   "界面与提示": 345,
   "新闻·对话·其他": 27,
   "ANTHOLOGY 参考": 148,
   "技术缩写": 18
  },
  "variants": 3,
- "case_sensitive": 73,
+ "case_sensitive": 79,
  "risky_latin_canon": 34,
  "quoted_keys": 158,
  "cross_layer_conflicts": 5,
@@ -171,17 +171,10 @@
    "samples": []
   },
   {
-   "severity": "medium",
+   "severity": "ok",
    "code": "case_policy",
-   "detail": "风险拉丁词未写入 case_sensitive：6 条",
-   "samples": [
-    "dog",
-    "dogs",
-    "lurker",
-    "lurkers",
-    "psysucker",
-    "psysuckers"
-   ]
+   "detail": "风险拉丁词未写入 case_sensitive：0 条",
+   "samples": []
   },
   {
    "severity": "ok",
@@ -199,8 +192,8 @@
  "severity": {
   "blocking": 0,
   "high": 0,
-  "medium": 4,
+  "medium": 3,
   "low": 2,
-  "ok": 14
+  "ok": 15
  }
 }
