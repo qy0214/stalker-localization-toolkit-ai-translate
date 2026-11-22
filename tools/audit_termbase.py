@@ -185,6 +185,9 @@ def main():
 
     def stem_word(w):
         w = w.casefold().replace("ё", "е")
+        if re.search(r"\d", w):
+            return w    # ★ 型号词（акс-74у 等）词尾不是语法屈折，不归一，
+                        #   否则 АКС-74У 会误撞 АКС-74（2026-11-22）
         for suf in sorted(suffixes, key=len, reverse=True):
             if len(w) > len(suf) + 3 and w.endswith(suf):
                 return w[:-len(suf)]

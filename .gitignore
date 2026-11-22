@@ -49,3 +49,6 @@ backup/
 sim_out/
 proper_out.txt
 dist/_zip_sha.txt
+
+# 语料采集临时下载（压缩包/DB/克隆仓库）
+tmp/

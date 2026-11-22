@@ -69,7 +69,7 @@ check("A1 只含插件+解析器+术语数据+来源声明（无模型/运行库
       set(files) == EXPECT, str(sorted(set(files) ^ EXPECT) or files))
 
 size = sum(os.path.getsize(os.path.join(SHARE, f)) for f in files)
-check("A2 体积轻量（< 3 MB，可随插件目录分享）", size < 3000 * 1024,
+check("A2 体积轻量（< 4 MB，可随插件目录分享）", size < 4000 * 1024,
       "%.0f KB" % (size / 1024.0))
 
 bad_tokens = ["STALKER-HH", "\\Users\\", "AppData", "Admin"]
