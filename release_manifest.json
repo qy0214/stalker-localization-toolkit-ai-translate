@@ -1,26 +1,23 @@
 {
-  "generated_at": "2026-11-22T20:01:35+08:00",
+  "generated_at": "2026-11-22T20:22:56+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "c102541",
+    "commit": "220e63c",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
       "M README.md",
-      " D dist/ai_translate_plugin_v1.9.12.zip",
-      " M plugins/ai_translate.py",
+      " M dist/ai_translate_plugin_v1.9.13.zip",
       " M plugins/ai_translate_assets/glossary_builtin.json",
       " M plugins/ai_translate_assets/stalker_termbase.json",
-      " M tests/test_1912_port.py",
+      " M tests/test_1913_port.py",
       " M tools/stalker_termbase.json",
       " M tools/termbase_audit.json",
       " M tools/termbase_audit_report.md",
       " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\"",
-      "?? dist/ai_translate_plugin_v1.9.13.zip",
       "?? docs/",
-      "?? tests/test_1913_port.py",
       "?? tools/DIAG_20261122.md",
       "?? tools/analyze_iwp_output.py",
       "?? tools/audit_iwp_deep.py",
@@ -49,24 +46,24 @@
       "role": "插件发布 zip",
       "path": "dist\\ai_translate_plugin_v1.9.13.zip",
       "exists": true,
-      "size": 354402,
-      "sha256": "beb1f20d2ad6017a7cd784cde28a3e7d90371fd6038a7b4b2712a96a3a2bea2e",
+      "size": 356466,
+      "sha256": "ea0f1875d1df4e4e2d4f26cb47b2ce8c9df886faf1007c4b2fd9c2755726ca5b",
       "note": "当前发布包"
     },
     {
       "role": "术语库（随包，只读）",
       "path": "plugins\\ai_translate_assets\\glossary_builtin.json",
       "exists": true,
-      "size": 320238,
-      "sha256": "d23ad700944a8bc17e573644dda8990571f965d27762b05e6806963bbe8d4e6d",
+      "size": 322082,
+      "sha256": "e90e93d0ad82ad0d8950749e4eaa98b46fad2313ff3845a531d4d9b7e70a2177",
       "note": "运行时匹配的内置层"
     },
     {
       "role": "术语基表（分类）",
       "path": "plugins\\ai_translate_assets\\stalker_termbase.json",
       "exists": true,
-      "size": 325963,
-      "sha256": "3220c3591238fd61942a405c1b35187ff170ae5f983f06dec7190458e59dea30",
+      "size": 327841,
+      "sha256": "89d8713ef9b86ca52fed2c5d31d6b9a485d67945a0918559aa29b8e84cf16802",
       "note": "导入用"
     },
     {
@@ -89,8 +86,8 @@
       "role": "使用说明",
       "path": "使用说明.txt",
       "exists": true,
-      "size": 29412,
-      "sha256": "8222488dc1515ca0215324f4966503b2b6c008d4e48f6cf83d7b606f148cd75c",
+      "size": 29597,
+      "sha256": "c65c75f05f5e921db825abea485eeed6213530c9cfd1138e7b688d794f594121",
       "note": "含发布包 SHA-256"
     },
     {
@@ -120,7 +117,7 @@
   ],
   "zip": {
     "path": "dist\\ai_translate_plugin_v1.9.13.zip",
-    "sha256": "beb1f20d2ad6017a7cd784cde28a3e7d90371fd6038a7b4b2712a96a3a2bea2e",
+    "sha256": "ea0f1875d1df4e4e2d4f26cb47b2ce8c9df886faf1007c4b2fd9c2755726ca5b",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -231,7 +228,7 @@
     {
       "check": "术语基表：_meta.total_entries == 实际分类合计",
       "ok": true,
-      "detail": "meta 9094 / 实际 9094"
+      "detail": "meta 9181 / 实际 9181"
     },
     {
       "check": "术语基表：_meta.categories == 实际分类条数",
@@ -246,12 +243,12 @@
     {
       "check": "术语库：随包条目 >= 8000",
       "ok": true,
-      "detail": "9094 条"
+      "detail": "9181 条"
     },
     {
       "check": "术语库：随包 >= 分类基表",
       "ok": true,
-      "detail": "9094 / 9094"
+      "detail": "9181 / 9181"
     },
     {
       "check": "使用说明含 exe SHA-256",
@@ -261,7 +258,7 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "beb1f20d2ad6017a…"
+      "detail": "ea0f1875d1df4e4e…"
     },
     {
       "check": "使用说明含插件版本",
@@ -275,22 +272,22 @@
     }
   ],
   "term_data": {
-    "glossary_entries": 9094,
-    "termbase_entries": 9094,
+    "glossary_entries": 9181,
+    "termbase_entries": 9181,
     "termbase_categories": {
       "阵营与组织": 107,
-      "人物与军衔": 3081,
+      "人物与军衔": 3164,
       "地点与区域": 366,
       "变异生物": 79,
       "物品·武器·装备·神器": 922,
       "任务": 907,
       "百科与术语": 3094,
-      "界面与提示": 345,
+      "界面与提示": 349,
       "新闻·对话·其他": 27,
       "ANTHOLOGY 参考": 148,
       "技术缩写": 18
     },
-    "termbase_meta_total": 9094
+    "termbase_meta_total": 9181
   },
   "storage": [
     {
@@ -334,7 +331,7 @@
     "note": "2026-10-23 清单记录；文件已在清理中移除"
   },
   "tracked": {
-    "files": 74,
-    "bytes": 21358540
+    "files": 76,
+    "bytes": 21727101
   }
 }

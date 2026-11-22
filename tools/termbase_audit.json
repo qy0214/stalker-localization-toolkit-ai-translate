@@ -1,30 +1,30 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 9094,
+ "total": 9181,
  "layers": {
   "canon": 1474,
-  "names": 3081,
+  "names": 3164,
   "technical": 18,
-  "reference": 4521
+  "reference": 4525
  },
  "categories": {
   "阵营与组织": 107,
-  "人物与军衔": 3081,
+  "人物与军衔": 3164,
   "地点与区域": 366,
   "变异生物": 79,
   "物品·武器·装备·神器": 922,
   "任务": 907,
   "百科与术语": 3094,
-  "界面与提示": 345,
+  "界面与提示": 349,
   "新闻·对话·其他": 27,
   "ANTHOLOGY 参考": 148,
   "技术缩写": 18
  },
  "variants": 3,
- "case_sensitive": 79,
+ "case_sensitive": 81,
  "risky_latin_canon": 34,
- "quoted_keys": 158,
- "cross_layer_conflicts": 5,
+ "quoted_keys": 160,
+ "cross_layer_conflicts": 7,
  "case_conflicts": 0,
  "checks": [
   {
@@ -42,10 +42,12 @@
   {
    "severity": "medium",
    "code": "quoted_vs_bare",
-   "detail": "引号形态不同且译文不同（不同源串，运行时不合并）：5 组",
+   "detail": "引号形态不同且译文不同（不同源串，运行时不合并）：7 组",
    "samples": [
     "'loners' -> [('阵营与组织', '\"Loners\"', '“中立者”'), ('百科与术语', 'Loners', '独行者潜行者')]",
     "'army' -> [('阵营与组织', '\"Army\"', '“军事”'), ('百科与术语', 'Army', '军方')]",
+    "'черный' -> [('人物与军衔', 'чёрный', '黑色的'), ('人物与军衔', '\"Чёрный\"', '黑子')]",
+    "'kaput' -> [('人物与军衔', 'kaput', '完蛋'), ('人物与军衔', '\"Kaput\"', '卡普特')]",
     "'battery' -> [('物品·武器·装备·神器', 'Battery', '蓄电池'), ('百科与术语', '\"Battery\"', '“电池”')]",
     "'inferno' -> [('百科与术语', '\"Inferno\"', '“炼狱”'), ('百科与术语', 'Inferno', '地狱')]",
     "'burner' -> [('百科与术语', '\"Burner\"', '“炙烤”'), ('百科与术语', 'Burner', '燃烧器')]"

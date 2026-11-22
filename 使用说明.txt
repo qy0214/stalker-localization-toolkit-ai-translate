@@ -30,7 +30,7 @@ AI 离线翻译插件 · 分享包说明
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
 本插件 zip（ai_translate_plugin_v1.9.13.zip）：
-    beb1f20d2ad6017a7cd784cde28a3e7d90371fd6038a7b4b2712a96a3a2bea2e
+    ea0f1875d1df4e4e2d4f26cb47b2ce8c9df886faf1007c4b2fd9c2755726ca5b
 
 PowerShell 校验：
     Get-FileHash .\ai_translate_plugin_v1.9.13.zip -Algorithm SHA256
@@ -111,6 +111,13 @@ oid）；不一致会删除该文件并自动换源。
 
 四点五、1.6.0 – 1.9.13 修了什么（与你直接相关）
 ----------------------------------------
+* （1.9.13 词库扩充）st_characters.xml 97 条人物绰号/军衔全部核实收录：
+  杰格佳廖夫/祖鲁/瓦诺/洛基/酒保/苏丹/卡丹/斯纳格/夏威夷人/松鸡 等；
+  同时纠正 Nitro→硝基、100 Rads→辐射100、Глухарь→松鸡、
+  Sickle→镰刀、Walrus→海象、Ashot→阿肖特、Kremen→火石、
+  Tihiy→季希、Cherniy→黑子、Bulava→布拉瓦、Gazon→加宗等误译；
+  4 组大小写/跨类冲突按审计规则修正（warrant officer→准尉 等）。
+  词库 9084→9181，strict 审计 0 blocking / 0 high。
 * （1.9.13）终审 3 缺口修复（通用型）：①颜色码后粘连冠词剥离（%c[default]The科学家）；
   ②专名回填扩展——异常/地点/物品专名（whirligig→旋转木马）同样回填，
   允许复数/所有格（Whirligigs/Jupiter's）与大小写漂移；

@@ -100,9 +100,9 @@ def main():
 
     # ---- N3 词库补录 ----
     for w, zh in [("Circus", "马戏团"), ("Duga", "杜加"),
-                  ("Skadovsk", "斯卡多夫斯克"), ("100 Rads", "100拉德"),
+                  ("Skadovsk", "斯卡多夫斯克"), ("100 Rads", "辐射100"),
                   ("Spore", "孢子"), ("Hercules", "大力士"),
-                  ("Psy-block", "精神阻断剂"), ("Nitro", "尼特罗"),
+                  ("Psy-block", "精神阻断剂"), ("Nitro", "硝基"),
                   ("Swede", "瑞典佬"), ("Volcano", "火山")]:
         check("gloss:%s" % w.lower().replace(" ", "_"),
               m.termbase_exact_translation(w) == zh,
