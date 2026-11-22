@@ -1,29 +1,29 @@
 # AI 离线翻译插件 · 发布清单
 
-- 生成时间：`2026-11-22T20:22:56+08:00`
+- 生成时间：`2026-11-22T20:40:40+08:00`
 - 工作区：仓库根目录
 - 范围：**AI 离线翻译插件（ai_translate）**
-- Git：`main` @ `220e63c`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
-- 已跟踪文件：76 个，20.72 MB
+- Git：`main` @ `9ac64b2`（生成时 HEAD；清单本身在后续提交入库）（有未提交改动）
+- 已跟踪文件：75 个，20.38 MB
 
 ## 1. 版本与交付物
 
 | 项 | 值 |
 |---|---|
-| 插件版本 | `1.9.13` |
-| 预期版本 | `1.9.13` |
+| 插件版本 | `1.9.14` |
+| 预期版本 | `1.9.14` |
 | 适用工具集 | `STALKER Localization Toolkit 1.1.0` |
 | 历史 exe FileVersion | `1.1.0.0` |
 
 | 角色 | 路径 | 大小 | SHA-256 | 说明 |
 |---|---|---:|---|---|
-| 插件分享副本 | `plugins\ai_translate.py` | 359.91 KB | `66553c413c3e949b829ed9c66ff53999eb3bfbed31c16d0fb4b48a6124e385ea` | 纯标准库，保留必要安全说明 |
-| 插件发布 zip | `dist\ai_translate_plugin_v1.9.13.zip` | 348.11 KB | `ea0f1875d1df4e4e2d4f26cb47b2ce8c9df886faf1007c4b2fd9c2755726ca5b` | 当前发布包 |
+| 插件分享副本 | `plugins\ai_translate.py` | 361.40 KB | `8931c333d5d11a197d388942f04d72cd46e88a848a809074b5195f6364769328` | 纯标准库，保留必要安全说明 |
+| 插件发布 zip | `dist\ai_translate_plugin_v1.9.14.zip` | 348.56 KB | `9e1a5b90f8811bc7d139101db108074ab4e0ecb2a5dc474db36e9b5f4836f273` | 当前发布包 |
 | 术语库（随包，只读） | `plugins\ai_translate_assets\glossary_builtin.json` | 314.53 KB | `e90e93d0ad82ad0d8950749e4eaa98b46fad2313ff3845a531d4d9b7e70a2177` | 运行时匹配的内置层 |
 | 术语基表（分类） | `plugins\ai_translate_assets\stalker_termbase.json` | 320.16 KB | `89d8713ef9b86ca52fed2c5d31d6b9a485d67945a0918559aa29b8e84cf16802` | 导入用 |
 | X-Ray 解析器 | `plugins\ai_translate_assets\xray_pkg.zip` | 7.38 KB | `2f3e1dcd4b2ce701e981d5c0f3e6c16cf17782692a5a892aa9cb1e159e63f8a6` | 解析 XML/LTX/脚本 |
 | 第三方来源声明 | `plugins\ai_translate_assets\THIRD_PARTY_NOTICES.txt` | 1.18 KB | `d971f8c84ae81732effb86d0b3bb907166e81a2c804cf85207a0427f9b929d4e` | 随包分发（上游来源与许可状态） |
-| 使用说明 | `使用说明.txt` | 28.90 KB | `c65c75f05f5e921db825abea485eeed6213530c9cfd1138e7b688d794f594121` | 含发布包 SHA-256 |
+| 使用说明 | `使用说明.txt` | 29.92 KB | `ed41376ceff7f2d0949a99413cbd6ee53d65703b5c6e2facb7b077bddb588baa` | 含发布包 SHA-256 |
 | 术语库处理记录 | `术语库_处理记录.md` | 17.80 KB | `d353739807c1613c292abe8833f44e7f62066f5e76dd4fe2787af540e446c8f8` | 术语口径与修剪记录 |
 | 大小写冲突清单 | `术语库_大小写冲突清单.md` | 2.14 KB | `e2a491e9edd55be5a949778583d4bc29222ec9bdaf78d2783ab4183dc94f8279` | 术语大小写冲突处理 |
 | 历史工具集 exe | `STALKER Local Toolkit 1.1.0/STALKER Localization Toolkit 1.1.0.exe` | 3.19 MB | `171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947` | 2026-10-23 清单记录；文件已在清理中移除 |
@@ -50,8 +50,8 @@
 | 检查 | 结果 | 说明 |
 |---|---|---|
 | 插件语法 | 一致 | compile() 通过 |
-| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.13 / 预期 1.9.13 |
-| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.13.zip |
+| 插件版本 == 预期 | 一致 | PLUGIN_INFO 1.9.14 / 预期 1.9.14 |
+| zip 文件名含插件版本 | 一致 | ai_translate_plugin_v1.9.14.zip |
 | zip 条目 == 5 个预期文件 | 一致 | 多出：无；缺少：无 |
 | zip 不含空目录/运行库/模型/日志 | 一致 | 干净 |
 | zip 内文件 == 分享副本 | 一致 | 全部一致 |
@@ -67,8 +67,8 @@
 | 术语库：随包条目 >= 8000 | 一致 | 9181 条 |
 | 术语库：随包 >= 分类基表 | 一致 | 9181 / 9181 |
 | 使用说明含 exe SHA-256 | 一致 | 171ce0028151d06b… |
-| 使用说明含当前 zip SHA-256 | 一致 | ea0f1875d1df4e4e… |
-| 使用说明含插件版本 | 一致 | ai_translate 1.9.13 |
+| 使用说明含当前 zip SHA-256 | 一致 | 9e1a5b90f8811bc7… |
+| 使用说明含插件版本 | 一致 | ai_translate 1.9.14 |
 | dist 只保留当前版本 zip | 一致 | 仅当前版本 |
 
 ## 4. 术语数据规模
@@ -95,7 +95,7 @@
 
 ```powershell
 # 校验当前插件 zip
-Get-FileHash 'dist\ai_translate_plugin_v1.9.13.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.14.zip' -Algorithm SHA256
 
 # 重新生成清单
 python tools/gen_release_manifest.py

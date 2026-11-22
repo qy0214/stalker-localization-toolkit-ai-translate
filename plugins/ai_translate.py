@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.13",
+    "version": "1.9.14",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -3119,19 +3119,25 @@ _SCRIPT_QUOTED_RE = re.compile(r"[\"']([A-Za-z0-9_][A-Za-z0-9_.\-]{1,100})[\"']"
 
 _PROTECT_FILE_HINTS = ("credits", "ogg", "music", "songs", "enc_weapons",
                        "snames", "fnames", "character_name")
+# ★ 1.9.14：标题规则收紧——冒号前段含逗号/引号的是叙述句
+# （"Men, take note: ..."），标签形态（Name:/Radio:）无逗号。
 _TITLE_LIKE_RE = re.compile(
-    r"^[A-Za-z0-9][^\n:：]{0,80}[:：]\s*[A-Za-z0-9]")
+    r"^[A-Za-z0-9][A-Za-z0-9 .\-'/]{0,40}[:：]\s*[A-Za-z0-9]")
 _TITLE_DASH_RE = re.compile(
     r"^[A-Za-z0-9][^\n]{0,80}[—–]\s*[A-Za-z0-9]")
 _MODEL_LIKE_RE = re.compile(
     r'^[A-Z0-9][A-Za-z0-9 .\-/]*["“][^"”]{1,80}["”]')
 _CODE_LIKE_RE = re.compile(r"^[A-Z0-9][A-Z0-9 .\-/_]{1,30}$")
 _COPYRIGHT_RE = re.compile(r"^(?:©|\(c\)|copyright\b)", re.I)
+# ★ 1.9.14 误伤修正：`FAILED\b` 在 re.I 下命中叙述文里的 "failed"，
+# `teleport\w*` 命中叙事词 "teleport closer"（实测正常文本被当调试行跳过）。
+# 改为 FAILED 大小写敏感、teleport 只认 `teleport_…`/`teleport:` 形态。
 _DEBUG_LIKE_RE = re.compile(
-    r"(?:onItemDrop|npcObj|FAILED\b|sect\s*-|obj\s*:|gvid\s*:|"
-    r"^(?:~|\[[a-z0-9_:.\- ]+\]$)|"
-    r"\b(?:teleport\w*|reinit|kamps|npcItems|isVisual\w*)\b|"
-    r"content\s*:)", re.I)
+    r"(?:onItemDrop|npcObj|\bFAILED\b|sect\s*-|obj\s*:|gvid\s*:|"
+    r"^(?:~|(?i:\[[a-z0-9_:.\- ]+\]$))|"
+    r"\bteleport_[a-z0-9_]+|\bteleport\s*[:=]|"
+    r"\b(?:reinit|kamps|npcItems|isVisual\w*)\b|"
+    r"content\s*:)")
 _DEBUG_PHRASES = {"dead", "none", "null", "true", "false",
                   "avail end", "start here", "reinit timer"}
 
@@ -4363,12 +4369,30 @@ class TranslationJob(object):
                 except Exception:
                     retry = None
                 if retry is None:
-                    self.detail("  运行占位符未原样保留，保留原文：%s"
-                                % str(text)[:60])
-                    return text
-                self.detail("  控制符未保留，已按逐字保留要求重试：%s"
-                            % str(text)[:50])
-                out = retry
+                    # ★ 1.9.14 第三级兜底：切短块逐块译（占位符用
+                    # split_protected 保护不被切断），与完整性闸门同一
+                    # 模式。含 $clr_N、%c[...]、%s 的条目模型最容易破坏
+                    # 占位符，旧版在这里整条保留英文。
+                    sliced = None
+                    try:
+                        raw = self._force_sliced(masked, lang,
+                                                 note=_PLACEHOLDER_RETRY_NOTE)
+                        sliced = restore_runtime_tokens(raw, mapping) \
+                            if raw is not None else None
+                    except Exception:
+                        sliced = None
+                    if sliced is not None:
+                        self.detail("  运行占位符被破坏，切片翻译成功：%s"
+                                    % str(text)[:50])
+                        out = sliced
+                    else:
+                        self.detail("  运行占位符未原样保留，保留原文：%s"
+                                    % str(text)[:60])
+                        return text
+                else:
+                    self.detail("  控制符未保留，已按逐字保留要求重试：%s"
+                                % str(text)[:50])
+                    out = retry
             else:
                 out = restored
         if looks_like_prompt_echo(out):
