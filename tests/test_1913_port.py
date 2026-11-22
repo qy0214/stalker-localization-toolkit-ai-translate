@@ -64,7 +64,7 @@ def make_job():
 
 
 def main():
-    check("version:1.9.13", m.PLUGIN_INFO["version"] in ("1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17"),
+    check("version:1.9.13", m.PLUGIN_INFO["version"] in ("1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18"),
           m.PLUGIN_INFO["version"])
 
     # ---- N1 颜色码后粘连冠词 ----

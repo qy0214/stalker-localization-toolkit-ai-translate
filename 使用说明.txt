@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.9.17
+插件版本：ai_translate 1.9.18
 
 
 一、怎么装（30 秒）
@@ -29,14 +29,14 @@ AI 离线翻译插件 · 分享包说明
 工具集 exe（1.1.0 build_60，历史发布物）：
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
-本插件 zip（ai_translate_plugin_v1.9.17.zip）：
-    79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f
+本插件 zip（ai_translate_plugin_v1.9.18.zip）：
+    c461d49f921fe1c36b32513923ef9149b74653c4ddc1e168f0adf347b1845e4f
 
 PowerShell 校验：
-    Get-FileHash .\ai_translate_plugin_v1.9.17.zip -Algorithm SHA256
+    Get-FileHash .\ai_translate_plugin_v1.9.18.zip -Algorithm SHA256
 
 说明：exe 哈希取自清理前生成的发布清单；如果你手上的 exe 不是同一构建，
-请以那次发布清单为准。插件 zip 哈希对应本 1.9.17 分享包。
+请以那次发布清单为准。插件 zip 哈希对应本 1.9.18 分享包。
 插件运行时下载的 llama.cpp 运行库与模型，也会在下载后按发布方官方
 SHA-256 校验（llama.cpp b11612 GitHub Release digest / HuggingFace LFS
 oid）；不一致会删除该文件并自动换源。

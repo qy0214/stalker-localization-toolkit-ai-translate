@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.17",
+    "version": "1.9.18",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -720,6 +720,10 @@ def missing_big_numbers(src, out):
     if not src or not out:
         return []
     s = str(src)
+    # ★ 1.9.18（IWP 产物审计）：色码 %c[r,g,b,a] 内的数字是渲染参数，
+    # 不参与保真校验——实测 m249 百科的 109/193 为 %c 分量，被当缺失
+    # 金额补成「（原文数字 109）（原文数字 193）」注记污染译文。
+    s = re.sub(r"%c\[[^\]]*\]", " ", s)
     src_nums = set(_BIG_NUM_RE.findall(s))
     # ★ 1.9.12：型号尾号与年份区间不参与保真校验。
     # 实测武器长段描述含 `FN FNX-45` / `developed in 2007-2009` / `2800`，
@@ -1649,6 +1653,7 @@ def load_termbase_data():
 # "不可译专名"原样保留。只做整串精确匹配，避免正文普通词被误换。
 _BUILTIN_FLAT_CACHE = {"key": None, "data": {}}
 _TB_LOW_INDEX = {"key": None, "low": {}}
+_PARTIAL_GLOSS_CACHE = {"key": None, "words": []}
 
 
 def termbase_lookup(text):
@@ -1707,6 +1712,58 @@ def termbase_lookup(text):
     if low in blow:
         return blow[low]
     return None
+
+
+def partial_glossary_translation(src):
+    """专名保护命中但整串无词库键时，对串内硬层专名词做子串替换。
+
+    ★ 1.9.18（IWP 产物审计）：`Vasya "Boar"`（人物名+引号绰号）整串
+    不在词库 → 走专名保护原样保留英文，但 "Boar" 在 canon 有权威译名
+    "野猪"。约束（保守）：
+      * 只替换 canon/names 硬层词（reference/technical 不参与）；
+      * 词长 ≥3 且为 Title Case/全大写（专名形态，避免 doctor/case 类
+        普通词误换）；
+      * 整串 ≤60 字符（人物/物品短名条目），长句正文不适用；
+      * 精确词边界替换，一个词都不命中返回 None。
+    """
+    s = (src or "").strip()
+    if not s or len(s) > 60:
+        return None
+    global _PARTIAL_GLOSS_CACHE
+    data = load_termbase_data()
+    meta_layers = (data.get("_meta") or {}).get("layers") or {}
+    try:
+        _st = os.stat(_TERMBASE_PATH)
+        _k = (_st.st_mtime_ns, _st.st_size)
+    except OSError:
+        _k = None
+    if _PARTIAL_GLOSS_CACHE.get("key") != _k:
+        # load_term_layers 的 canon/names set 装的是词条键不是分类名，
+        # 硬层分类名要从 _meta.layers 取。
+        layers = set(meta_layers.get("canon") or []) | \
+            set(meta_layers.get("names") or [])
+        words = []
+        for cat, tbl in data.items():
+            if cat.startswith("_") or not isinstance(tbl, dict) \
+                    or cat not in layers:
+                continue
+            for k, v in tbl.items():
+                k = str(k)
+                if len(k) < 3 or not re.search(r"[A-Za-z]", k):
+                    continue
+                if not (k[:1].isupper() or k.isupper()):
+                    continue
+                words.append((k, str(v)))
+        _PARTIAL_GLOSS_CACHE = {"key": _k, "words": words}
+    out = s
+    changed = False
+    for k, v in _PARTIAL_GLOSS_CACHE.get("words") or []:
+        if k in out:
+            out2 = re.sub(rf"(?<!\w){re.escape(k)}(?!\w)", v, out)
+            if out2 != out:
+                out = out2
+                changed = True
+    return out if changed else None
 
 
 def termbase_exact_translation(text):
@@ -3076,6 +3133,8 @@ def missing_model_tokens(src, out):
         return []
     missing = []
     seen = set()
+    # ★ 1.9.18：色码 %c[r,g,b,a] 内数字不是型号，先剥离再扫。
+    src = re.sub(r"%c\[[^\]]*\]", " ", str(src))
     for m in _MODEL_TOKEN_RE.finditer(src):
         tok = m.group(0).strip()
         if tok in seen or len(tok) < 4:
@@ -3173,9 +3232,15 @@ _TECH_CALIBER_RE = re.compile(
 
 
 def looks_like_technical_text(text):
-    """口径/弹药/尺寸类整串：只做技术串保护，不当普通正文。"""
+    """口径/弹药/尺寸类整串：只做技术串保护，不当普通正文。
+
+    ★ 1.9.18（全 MOD 重放审计）：含句末标点的串是正文（实测 NS7
+    'Магазин на 10 патронов калибра 10.3x45мм.' 弹匣描述被整条跳过）。
+    """
     s = str(text or "").strip()
     if not s or len(s) > 60 or re.search(r"[。！？!?；;]", s):
+        return False
+    if re.search(r"[.。！？!?]\s*$", s) and len(s) > 20:
         return False
     if _TECH_SPEC_RE.match(s) or _TECH_CALIBER_RE.match(s):
         return True
@@ -3263,6 +3328,28 @@ def looks_like_code_or_debug(rel, text):
     return False
 
 
+# ★ 1.9.18（全 MOD 重放审计，对齐 2.0.11/2.0.21）：以下目录的短串是
+# 玩家可见正文，identifier/保护判定命中时放行送翻（WOT 武器升级名、
+# 新闻碎片 'a merc'、UI 'Dismissable'/'March'、任务名 'Psy-storm: …'）。
+_PLAYER_LABEL_DIRS = ("achievement", "game_relations", "binoc", "dialog",
+                      "relation", "reputation", "rank", "quick_menu",
+                      "companion", "news", "dynamic_news", "pda", "options",
+                      "equipment", "quests", "loadscreen", "land_names",
+                      "weapons_upgrades", "upgrades", "barter", "cryray")
+_UPPER_LABEL_DIRS = ("achievement", "game_relations", "relation",
+                     "reputation", "rank", "quick_menu", "companion",
+                     "dialog", "news", "dynamic_news", "quests",
+                     "loadscreen")
+
+
+def is_player_facing_label(rel, text=""):
+    low = (rel or "").lower().replace("\\", "/")
+    if not any(x in low for x in _PLAYER_LABEL_DIRS):
+        return False
+    s = (text or "").strip()
+    return bool(s) and len(s) <= 90
+
+
 def looks_like_identifier_text(text):
     """纯小写 ASCII 的“段落/任务/节名”不是用户正文（如 resque information）。"""
     s = (text or "").strip()
@@ -3302,8 +3389,15 @@ def looks_like_proper_text(rel, text):
         return True
     if hint == "enc_weapons" and len(s) <= 40 and len(s.split()) <= 6:
         return True
-    if (_TITLE_LIKE_RE.match(s) or _TITLE_DASH_RE.match(s)
-            or _MODEL_LIKE_RE.match(s)):
+    # ★ 1.9.18（全 MOD 重放审计）：长句不是标题/型号——'The situation
+    # is this: ...' 长正文、引号紧跟 Title 词的整段描述被误跳，实测漏译。
+    if (_TITLE_LIKE_RE.match(s) and len(s) <= 60
+            and not re.search(r"[.!?。！？]\s*$", s)):
+        return True
+    if _TITLE_DASH_RE.match(s) and len(s) <= 60:
+        return True
+    if (_MODEL_LIKE_RE.match(s) and len(s) <= 90
+            and not re.search(r'[.!?。！？]\s*["”»]?\s*$', s)):
         return True
     if len(s) <= 20 and s.isupper() and any(c.isalpha() for c in s):
         # ★ 1.9.11：只保护拉丁字母的型号/缩写（NVIDIA DLSS、AK-74）。
@@ -5891,31 +5985,39 @@ class TranslationJob(object):
             if looks_like_code_or_debug(rel, src):
                 st["skipped"] += 1
                 continue
+            # ★ 1.9.18（全 MOD 重放审计）：术语直取/句式直译提前到
+            # noise/tech/identifier 判定之前——词库整串命中 = 明确翻译
+            # 意图，任何筛选都不该拦（credits/音乐强保护文件除外）。
+            if not looks_like_hard_protected_file(rel):
+                _exact = termbase_exact_translation(src) \
+                    if src not in self.glossary else None
+                if _exact is not None and _exact != src:
+                    changes[ent.id] = (lang, _exact)
+                    st["translated"] += 1
+                    continue
+                _pat = pattern_translate(src, termbase_exact_translation)
+                if _pat is not None and _pat != src:
+                    changes[ent.id] = (lang, _pat)
+                    st["translated"] += 1
+                    continue
             if (looks_like_generated_noise(rel, src)
                     or looks_like_technical_text(src)
-                    or looks_like_identifier_text(src)):
+                    or (looks_like_identifier_text(src)
+                        and not is_player_facing_label(rel, src))):
                 st["skipped"] += 1
                 continue
             if self.only_referenced and ent.id not in self._ref_counts:
                 continue
-            # ★ 1.9.11 术语优先：整条命中随包词库（БАРМЕН→酒保等）直接取译名，
-            # 不再当"不可译专名"跳过；库里没有的才走保护判定/模型。
-            # 用户/会话词库已给译名时不介入——尊重用户选择与保护专名语义。
-            _exact = termbase_exact_translation(src) \
-                if src not in self.glossary else None
-            if _exact is not None and _exact != src:
-                changes[ent.id] = (lang, _exact)
-                st["translated"] += 1
-                continue
-            # ★ 1.9.12 通用新闻句式：精确查表未命中时再试句式模板
-            # （"We were attacked by a X" 等），名词走词库；不命中照常送模型。
-            _pat = pattern_translate(src, termbase_exact_translation)
-            if _pat is not None and _pat != src:
-                changes[ent.id] = (lang, _pat)
-                st["translated"] += 1
-                continue
             if self.protect_proper and looks_like_proper_text(rel, src):
-                st["skipped"] += 1
+                # ★ 1.9.18：保护命中先试硬层子串替换（Vasya "Boar"→
+                # 瓦夏"野猪"），词库无可用词才保留原文。
+                _p = (partial_glossary_translation(src)
+                      if src not in self.glossary else None)
+                if _p is not None and _p != src:
+                    changes[ent.id] = (lang, _p)
+                    st["translated"] += 1
+                else:
+                    st["skipped"] += 1
                 continue
             use_lang = self.src_lang if self.src_lang != "auto" else lang
             # 字段名不可靠：不少 MOD 把英语放进 <rus>，或把俄语放进 <text>。
@@ -6615,6 +6717,13 @@ class TranslationJob(object):
                 rep[send] = _exact
                 continue
             if self.protect_proper and looks_like_proper_text(rel, send):
+                # ★ 1.9.18：硬层子串替换仅限 UTF-8 表（cp1251 写回塞中文
+                # 会 UnicodeEncodeError，与术语直取同口径）。
+                if enc.lower() in ("utf-8", "utf8", "utf-8-sig"):
+                    _p = (partial_glossary_translation(send)
+                          if send not in self.glossary else None)
+                    if _p is not None and _p != send:
+                        rep[send] = _p
                 continue
             if self._cancelled():
                 return None

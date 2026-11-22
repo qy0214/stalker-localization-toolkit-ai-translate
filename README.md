@@ -4,12 +4,12 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.17（2026-11-23）**：多源语料同步——与 2.0.20 同口径的多源
-收割（Gunslinger 人工汉化软参考层 + 垃圾过滤器、CoP 官方中文、NS2016 补缺、
-bilibili wiki 名词表、GAMMA 汉化组软参考层），词库 21074→**36323** 条；
-`termbase_lookup` casefold 归一索引 O(1)（3.656→0.125ms/次）；audit 词干
-归一加数字词保护（АКС-74У 不再误撞 АКС-74）。strict 审计 0 blocking/0 high。
-2.0.20 的全部译文修复与场景批处理/上下文/风格后处理保持不变。完整变更见下文。
+**当前版本 1.9.18（2026-11-23）**：全库错误清理 + 闸门修正——全库确定性
+错误清理 14 条（口径经 31 案例回归：载具误植双语词根豁免、型号 token 数字
+核心/字母骨架判定）、垃圾过滤全源生效；数字/型号闸门豁免色码内数字（IWP
+审计实测 109/193 色码分量被误补注记）；专名保护新增硬层子串替换
+（`Vasya "Boar"`→`瓦夏"野猪"`）。词库 36323→**36477**。
+strict 0 blocking/0 high。完整变更见下文。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
 
@@ -60,22 +60,28 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.17`
+- 插件版本：`ai_translate 1.9.18`
 - 当前 zip SHA-256：
-  `79aede3426e2e78f90f5d38518ea448cc70b32e7bd8f66ae129638ab4428dc4f`
+  `4d43580bcb098114af481ff2f89592b36906a371f0f7b81bb6d9b3380064c39e`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
-- 术语规模：`glossary_builtin.json` 36323 条 / `stalker_termbase.json` 36323 条；
-  canon 4282 / names 3250 / technical 18 / reference 28773（Gunslinger 参考、
+- 术语规模：`glossary_builtin.json` 36477 条 / `stalker_termbase.json` 36477 条；
+  canon 4287 / names 3250 / technical 18 / reference 28922（Gunslinger 参考、
   GAMMA 参考、ANTHOLOGY 参考、百科/任务/界面/新闻为软提示层）
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.17.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.18.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
 
-## 1.6.0 – 1.9.17 变更摘要
+## 1.6.0 – 1.9.18 变更摘要
 
+- **1.9.18 全库错误清理 + 闸门修正**（2026-11-23）：全库确定性错误清理 14 条
+  （口径经 31 案例回归零误杀：载具误植双语词根豁免——此前俄/英文源的正确
+  载具翻译被中文-only 检查误杀；型号 token 数字核心/字母骨架判定；别名
+  Chaser 13→温彻斯特M1300 等人工排除清单），垃圾过滤全源生效；数字/型号
+  闸门豁免色码内数字；专名保护硬层子串替换（Vasya "Boar"→瓦夏"野猪"）；
+  词库 36323→36477；strict 0 blocking/0 high。
 - **1.9.17 多源语料同步**（2026-11-23）与 2.0.20 同口径：Gunslinger 人工汉化（configs.db 经 xrkit 解包原文，"Gunslinger 参考" 软层 5912 条 + 垃圾过滤器：载具名词误植/型号 token 漂移）＋ CoP 官方中文 1432 条（官方译名 × CoP 1.6.02 补丁包 rus/eng 解包）＋ NS2016 补缺 ＋ bilibili wiki 名词表 ＋ GAMMA 汉化组 7876 条（"GAMMA 参考" 软层，eng/rus × Anomaly 同 ID 配对）；词库 21074→36323；`termbase_lookup` casefold 归一索引 O(1)（3.656→0.125ms）；audit stemmer 数字词保护（АКС-74У 误撞 АКС-74）；strict 0 blocking/0 high，全量深度审计（tools/audit_termbase_full.py 五层）通过。
 
 - **1.9.16 词库大扩充**（2026-11-22）从 AREA 人工汉化包与 NS7 9月6日官方汉化补丁收割术语对 1.2 万+（工具 tools/harvest_termbase_from_human.py，可对任意未来人工补丁复用）；NS7 官方译名为权威冲突覆盖；引号短语键/长描述/占位符不符按审计规则剔除（收割会遮蔽组件术语查找的教训已固化进工具）；词库 9181→21074，strict 0 blocking/0 high。

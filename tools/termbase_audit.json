@@ -1,26 +1,26 @@
 {
  "format": "stalker-toolkit-termbase/2",
- "total": 36323,
+ "total": 36472,
  "layers": {
-  "canon": 4282,
+  "canon": 4276,
   "names": 3250,
   "technical": 18,
-  "reference": 28773
+  "reference": 28928
  },
  "categories": {
   "阵营与组织": 107,
   "人物与军衔": 3250,
   "地点与区域": 397,
   "变异生物": 79,
-  "物品·武器·装备·神器": 3699,
+  "物品·武器·装备·神器": 3693,
   "任务": 2456,
-  "百科与术语": 3765,
+  "百科与术语": 3762,
   "界面与提示": 3263,
   "新闻·对话·其他": 5353,
   "ANTHOLOGY 参考": 148,
   "技术缩写": 18,
-  "Gunslinger 参考": 5912,
-  "GAMMA 参考": 7876
+  "Gunslinger 参考": 5948,
+  "GAMMA 参考": 7998
  },
  "variants": 3,
  "case_sensitive": 81,
