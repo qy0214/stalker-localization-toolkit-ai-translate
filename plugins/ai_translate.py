@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.18",
+    "version": "1.9.19",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -72,13 +72,40 @@ def _writable(path):
         return False
 
 
-if _writable(_ASSETS):
+def _has_runtime_data(path):
+    """插件目录里是否已有运行数据（老用户把模型/运行库/配置下在了这里）。"""
+    try:
+        if os.path.isfile(os.path.join(path, "config.json")):
+            return True
+        for d in ("models", "bin"):
+            sub = os.path.join(path, d)
+            if os.path.isdir(sub) and os.listdir(sub):
+                return True
+    except OSError:
+        pass
+    return False
+
+
+# ★ 1.9.19（同步 2.x 的 portable.txt 闸门，兼容式）：旧逻辑只要随包目录可写
+# 就把 models/bin/logs/downloads/config.json 全写进插件目录——**导入即污染**
+# 分享包，本仓库自己的发布门禁 A6 就会报"分享包含运行产物"（实测每次跑测试
+# 都新建 4 个空目录）。2.x 的做法是默认落 %LOCALAPPDATA%、只有显式放
+# portable.txt 才自包含。这里采用兼容式闸门，避免老用户已下载到插件目录的
+# GB 级模型失效重下：
+#   1) 显式 portable.txt + 可写        → 数据跟着插件走（绿色版）
+#   2) 插件目录已有运行数据 + 可写     → 保持原样（老用户不重下）
+#   3) 其余（含只读安装位置）          → %LOCALAPPDATA%
+_PORTABLE_MARK = os.path.join(_HERE, "portable.txt")
+_LOCAL_ROOT = os.path.join(
+    os.environ.get("LOCALAPPDATA")
+    or os.path.expanduser("~"),
+    "STALKER Localization Toolkit", "ai_translate")
+
+if _writable(_ASSETS) and (os.path.isfile(_PORTABLE_MARK)
+                           or _has_runtime_data(_ASSETS)):
     _DATA_ROOT = _ASSETS
 else:
-    _DATA_ROOT = os.path.join(
-        os.environ.get("LOCALAPPDATA")
-        or os.path.expanduser("~"),
-        "STALKER Localization Toolkit", "ai_translate")
+    _DATA_ROOT = _LOCAL_ROOT
 
 _MODELS_DIR = os.path.join(_DATA_ROOT, "models")
 _BIN_DIR = os.path.join(_DATA_ROOT, "bin")
@@ -1622,7 +1649,12 @@ _DEFAULT_LAYERS = {
     "canon": list(_HARD_TERM_CATEGORIES),
     "names": ["人物与军衔"],
     "technical": ["技术缩写"],
-    "reference": ["ANTHOLOGY 参考", "Gunslinger 参考", "GAMMA 参考"],
+    # ★ 1.9.19（同步 2.0.22）：Gunslinger/GAMMA 两个软参考层整体退役——
+    # 逐条语义抽检明确错率约 31%（HK→香港、Find %s for Cardan 丢信息、
+    # .45 Hydra-shock→.45 AP弹、Остров валунов→大沼泽. 露营点 ID 错配、
+    # 绰号↔姓氏系统性错配、'.'→统计）。数据留档在 2.x 仓库
+    # corpus/soft_reference_retired.json；本仓库随包资产已同步为退役后版本。
+    "reference": ["ANTHOLOGY 参考"],
 }
 _RISKY_LATIN_RE = re.compile(r"^[a-z][a-z0-9._\-/&()]{1,18}$")
 
@@ -1663,10 +1695,21 @@ def termbase_lookup(text):
     只做整串精确匹配，不做子串。分类表与扁平表都走 mtime 缓存——终检对
     几千条目逐条调用，不能每次重读 350KB JSON。
     """
-    s = (text or "").strip().strip('"\u00ab\u00bb\u201c\u201d\'')
-    if not s:
+    raw = (text or "").strip()
+    s = raw.strip('"\u00ab\u00bb\u201c\u201d\'')
+    if not raw:
         return None
-    low = s.casefold()
+    # ★ 1.9.19（同步 2.0.22）：首尾引号不敏感必须是**双向**的——旧实现只把
+    # 输入剥引号后查，键本身带引号的条目永远查不到（实测 50 条不可达，含
+    # `Учёный «О-Сознания»`→`“共同意识”科学家`、`"Tears of Electra"`→
+    # `“电之泪”`、`"Monolith" Chief`→`黑石首领`）。原串优先、剥引号兜底。
+    cands = []
+    for _form in (raw, s):
+        if not _form:
+            continue
+        for _c in (_form, _form.casefold()):
+            if _c not in cands:
+                cands.append(_c)
     # 分类表：termbase 原始 structures（load_term_layers 的 canon/names 是
     # set，只有 technical/reference 带映射），这里直接读原始表拿全量映射。
     data = load_termbase_data()
@@ -1689,10 +1732,9 @@ def termbase_lookup(text):
                     idx[kl] = str(v)
         _TB_LOW_INDEX = {"key": _tkey, "low": idx}
     idx = _TB_LOW_INDEX.get("low") or {}
-    if s in idx:
-        return idx[s]
-    if low in idx:
-        return idx[low]
+    for _c in cands:
+        if _c in idx:
+            return idx[_c]
     # 扁平表（glossary_builtin.json，运行时真正用的那张），带 mtime 缓存
     try:
         _bst = os.stat(_GLOSS_BUILTIN)
@@ -1707,14 +1749,20 @@ def termbase_lookup(text):
                                        for k, v in _bflat.items()}}
     bflat = _BUILTIN_FLAT_CACHE.get("data") or {}
     blow = _BUILTIN_FLAT_CACHE.get("low") or {}
-    if s in bflat:
-        return str(bflat[s])
-    if low in blow:
-        return blow[low]
+    for _c in cands:
+        if _c in bflat:
+            return str(bflat[_c])
+        if _c in blow:
+            return blow[_c]
     return None
 
 
-def partial_glossary_translation(src):
+_PARTIAL_MODEL_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z])(?:[A-Z]+[A-Za-z]*[-/]\d[\w\-/]*"
+    r"|\d[\w\-/]*[A-Z]+[A-Za-z]*|[A-Z]{2,})(?![a-z])")
+
+
+def partial_glossary_translation(src, rel=None):
     """专名保护命中但整串无词库键时，对串内硬层专名词做子串替换。
 
     ★ 1.9.18（IWP 产物审计）：`Vasya "Boar"`（人物名+引号绰号）整串
@@ -1728,6 +1776,11 @@ def partial_glossary_translation(src):
     """
     s = (src or "").strip()
     if not s or len(s) > 60:
+        return None
+    # ★ 1.9.19（同步 2.0.22）：制作名单/音乐表整文件不参与——与
+    # "连核心术语也不替换"同口径；2.0.21/1.9.18 新增本子串替换时漏了这层豁免，
+    # 实测全库 133 条写出里 103 条在 credits，产物如 `Executive 台钳 President`。
+    if rel is not None and looks_like_hard_protected_file(rel):
         return None
     global _PARTIAL_GLOSS_CACHE
     data = load_termbase_data()
@@ -1763,7 +1816,17 @@ def partial_glossary_translation(src):
             if out2 != out:
                 out = out2
                 changed = True
-    return out if changed else None
+    if not changed:
+        return None
+    # ★ 1.9.19（同步 2.0.22）：残留普通英文词 = 半中半英破碎产物
+    # （`Senior Sergeant "Mangun" Potryko` → `Senior 中士 "曼古恩" Potryko`、
+    # `Database Applications Engineer` → `Database Applications 工程师`），
+    # 人工汉化对同条目是全译。回落原样保留，宁可不翻也不写破碎文本。
+    # 型号/全大写缩写（PSO-1、AKMS、SIG、OTs-14-4A）是合法残留，先剥掉再判。
+    for w in re.findall(r"[A-Za-z]{3,}", _PARTIAL_MODEL_TOKEN_RE.sub(" ", out)):
+        if any(c.islower() for c in w):
+            return None
+    return out
 
 
 def termbase_exact_translation(text):
@@ -3335,7 +3398,11 @@ _PLAYER_LABEL_DIRS = ("achievement", "game_relations", "binoc", "dialog",
                       "relation", "reputation", "rank", "quick_menu",
                       "companion", "news", "dynamic_news", "pda", "options",
                       "equipment", "quests", "loadscreen", "land_names",
-                      "weapons_upgrades", "upgrades", "barter", "cryray")
+                      "weapons_upgrades", "upgrades", "barter", "cryray",
+                      # ★ 1.9.19（同步 2.0.22）：藏宝点/储物点名是 PDA 里玩家
+                      # 可见正文，全库 679 条被 identifier 跳过（'Backpack under
+                      # tree'、'Chest on the roof'、'Safe under the bush'）。
+                      "treasure", "secrets")
 _UPPER_LABEL_DIRS = ("achievement", "game_relations", "relation",
                      "reputation", "rank", "quick_menu", "companion",
                      "dialog", "news", "dynamic_news", "quests",
@@ -3348,6 +3415,30 @@ def is_player_facing_label(rel, text=""):
         return False
     s = (text or "").strip()
     return bool(s) and len(s) <= 90
+
+
+def _is_model_code_form(rel, text):
+    """code 过滤里"全大写型号/弹药规格"那一支是否为命中原因。
+
+    ★ 1.9.19（同步 2.0.22）：全大写型号短名被 code 整条拦掉、而词库有整串
+    中文译名（`PPSH-41`→`PPSH-41冲锋枪`、`BT MP9`→`BT MP9冲锋枪`）时按
+    "词库整串命中 = 明确翻译意图"放行；调试词/URL/版权行/单字符
+    （dead、True、None、ч）不是型号形态，仍跳过。
+    """
+    s = (text or "").strip()
+    if len(s) <= 1 or s.lower() in _DEBUG_PHRASES or _COPYRIGHT_RE.match(s):
+        return False
+    if _DEBUG_LIKE_RE.search(s):
+        return False
+    if s.lower().startswith(("http://", "https://", "www.")):
+        return False
+    low = (rel or "").lower()
+    if any(x in low for x in ("character_name", "snames", "fnames", "bio",
+                              "string_table_enc_zone", "string_table_levels",
+                              "mapspots")):
+        return False
+    return bool(any(c.isdigit() for c in s)
+                and re.fullmatch(r"[A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9 .\-/_]{0,40}", s))
 
 
 def looks_like_identifier_text(text):
@@ -3370,6 +3461,18 @@ def looks_like_identifier_text(text):
     return False
 
 
+def _is_prose_sentence(s):
+    """整句正文（不是标题/型号名）：句末标点结尾且够长，或很长且多词。"""
+    n = len(s)
+    if n >= 40 and re.search(r"[.!?。！？]\s*[\"”»']?\s*$", s):
+        return True
+    return n > 90 and len(re.findall(r"[A-Za-zА-Яа-яЁё]{2,}", s)) >= 8
+
+
+_TRACK_LIST_RE = re.compile(r"(?:ТРЕК|Трек|TRACK|Track|曲目)\s*[:：]?\s*\d+",
+                            re.I)
+
+
 def looks_like_hard_protected_file(rel):
     """制作名单/音乐列表：连核心术语也不替换；武器短名只保护非词库型号。"""
     low = (rel or "").lower().replace("\\", "/")
@@ -3386,6 +3489,15 @@ def looks_like_proper_text(rel, text):
     # 只保护短名，长描述仍交给模型（例如武器说明）。
     hint = next((h for h in _PROTECT_FILE_HINTS if h in low), "")
     if looks_like_hard_protected_file(rel):
+        # ★ 1.9.19（同步 2.0.22）："ogg/music" 命中的其实是物品表——
+        # `string_table_ogg_player.xml` 是 MP3 播放器/音乐闪存盘的名字与描述，
+        # 玩家在物品栏就能看到，人工汉化对长描述全部翻译。只放行这类长正文；
+        # 制作名单与人物名字表仍整表保护。**含曲目列表的条目不放行**：
+        # ogg_flash_* 描述后面跟着 `ТРЕК 01: Алиса — Веретено` 这类真实
+        # 歌名/歌手（全库 54 条），整串送翻会译错歌名。
+        if (hint in ("ogg", "music", "songs") and "credits" not in low
+                and _is_prose_sentence(s) and not _TRACK_LIST_RE.search(s)):
+            return False
         return True
     if hint == "enc_weapons" and len(s) <= 40 and len(s.split()) <= 6:
         return True
@@ -5983,6 +6095,15 @@ class TranslationJob(object):
             if not _has_translatable_text(src):
                 continue
             if looks_like_code_or_debug(rel, src):
+                # ★ 1.9.19（同步 2.0.22）：型号形态 + 词库整串命中 → 直取。
+                _mc = (termbase_exact_translation(src)
+                       if (src not in self.glossary
+                           and not looks_like_hard_protected_file(rel)
+                           and _is_model_code_form(rel, src)) else None)
+                if _mc is not None and _mc != src:
+                    changes[ent.id] = (lang, _mc)
+                    st["translated"] += 1
+                    continue
                 st["skipped"] += 1
                 continue
             # ★ 1.9.18（全 MOD 重放审计）：术语直取/句式直译提前到
@@ -6011,7 +6132,7 @@ class TranslationJob(object):
             if self.protect_proper and looks_like_proper_text(rel, src):
                 # ★ 1.9.18：保护命中先试硬层子串替换（Vasya "Boar"→
                 # 瓦夏"野猪"），词库无可用词才保留原文。
-                _p = (partial_glossary_translation(src)
+                _p = (partial_glossary_translation(src, rel)
                       if src not in self.glossary else None)
                 if _p is not None and _p != src:
                     changes[ent.id] = (lang, _p)
@@ -6720,7 +6841,7 @@ class TranslationJob(object):
                 # ★ 1.9.18：硬层子串替换仅限 UTF-8 表（cp1251 写回塞中文
                 # 会 UnicodeEncodeError，与术语直取同口径）。
                 if enc.lower() in ("utf-8", "utf8", "utf-8-sig"):
-                    _p = (partial_glossary_translation(send)
+                    _p = (partial_glossary_translation(send, rel)
                           if send not in self.glossary else None)
                     if _p is not None and _p != send:
                         rep[send] = _p

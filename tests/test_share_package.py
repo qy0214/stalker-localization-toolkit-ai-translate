@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 import sys
+sys.dont_write_bytecode = True   # 别把 .pyc 写进随包插件目录（发布门禁 A6 会判为运行产物）
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -113,6 +114,12 @@ BASELINE = sorted(files)
 # ---------------------------------------------------------------- B 冷启动可用
 print("\n--- B 冷启动（全新目录、无 config.json） ---")
 tmp = tempfile.mkdtemp(prefix="ait_cold_")
+# ★ 1.9.19：数据根闸门改为「显式 portable.txt 或插件目录已有运行数据」才写插件
+# 目录，否则落 %LOCALAPPDATA%。测试必须隔离 LOCALAPPDATA，否则 B2/B5/B6 会读到
+# 开发机上的真实配置与运行库（既不 hermetic，断言还会随本机状态漂移）。
+_iso_local = os.path.join(tmp, "localappdata")
+os.makedirs(_iso_local, exist_ok=True)
+os.environ["LOCALAPPDATA"] = _iso_local
 cold = os.path.join(tmp, "plugins")
 shutil.copytree(SHARE, cold)
 cold_py = os.path.join(cold, "ai_translate.py")
@@ -125,10 +132,31 @@ check("B0 导入后分享包本身未被写入（测试只在临时副本上操�
       "分享包目录保持原样")
 
 mod_cold = load(cold_py, "ait_cold")
-check("B1 全新目录下导入成功且数据根落在插件目录（便携模式）",
-      os.path.normcase(mod_cold._DATA_ROOT) == os.path.normcase(
-          os.path.join(cold, "ai_translate_assets")),
+_want_local = os.path.join(_iso_local, "STALKER Localization Toolkit",
+                           "ai_translate")
+check("B1a 全新目录+无 portable.txt+无运行数据 → 数据根落 %LOCALAPPDATA%"
+      "（不再污染分享包）",
+      os.path.normcase(mod_cold._DATA_ROOT) == os.path.normcase(_want_local),
       mod_cold._DATA_ROOT)
+
+_portable = os.path.join(tmp, "plugins_portable")
+shutil.copytree(SHARE, _portable)
+open(os.path.join(_portable, "portable.txt"), "w").close()
+mod_port = load(os.path.join(_portable, "ai_translate.py"), "ait_portable")
+check("B1b 显式 portable.txt → 数据根落插件目录（绿色版契约不变）",
+      os.path.normcase(mod_port._DATA_ROOT) == os.path.normcase(
+          os.path.join(_portable, "ai_translate_assets")),
+      mod_port._DATA_ROOT)
+
+_legacy = os.path.join(tmp, "plugins_legacy")
+shutil.copytree(SHARE, _legacy)
+_leg_assets = os.path.join(_legacy, "ai_translate_assets")
+with open(os.path.join(_leg_assets, "config.json"), "w", encoding="utf-8") as _f:
+    json.dump({"tier": "7b"}, _f)
+mod_leg = load(os.path.join(_legacy, "ai_translate.py"), "ait_legacy")
+check("B1c 插件目录已有运行数据（老用户）→ 保持插件目录，不强迫重下模型",
+      os.path.normcase(mod_leg._DATA_ROOT) == os.path.normcase(_leg_assets),
+      mod_leg._DATA_ROOT)
 check("B2 无 config.json 时配置回落默认值（不带任何本机设置）",
       not os.path.exists(mod_cold._CONFIG)
       and mod_cold.load_config()["in_dir"] == ""

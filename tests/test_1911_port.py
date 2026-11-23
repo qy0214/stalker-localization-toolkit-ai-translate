@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import sys
+sys.dont_write_bytecode = True   # 别把 .pyc 写进随包插件目录（发布门禁 A6 会判为运行产物）
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))

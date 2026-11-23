@@ -40,11 +40,36 @@
 - 许可证：Apache-2.0
 - 使用方式：不随本仓库分发，插件在用户机器上按 HuggingFace LFS oid 校验后下载。
 
-## 4. 游戏原文语料
+## 4. 游戏原文语料与人工汉化来源
 
 `tools/` 下的 `raw_pairs.json`、两本 NS-OGSR 词典、旧版人工词表与人工三语表
 包含《S.T.A.L.K.E.R.》游戏/模组原文，权利归原权利人所有；收录在此仅用于
 构建本项目的术语库，不代表对其再分发授权。
+
+随包术语库（`plugins/ai_translate_assets/stalker_termbase.json` 与
+`glossary_builtin.json`）的条目收割自以下第三方人工汉化文本。这些来源
+**均未声明开源许可证**，版权归各自权利人/汉化组；本仓库只保留来源署名，
+不主张任何额外授权，也不对它们的译文质量负责：
+
+| 来源 | 用途与状态 |
+|---|---|
+| NS OGSR 系列汉化补丁（2019 / 2026-02-19 / 2026-06-19） | **权威源**，条目并入 canon/names 等标准分类 |
+| GAMMA 汉化组（GSCTP）Anomaly 简体中文 | 曾为 `GAMMA 参考` 软层 7998 条；**1.9.19 整体退役** |
+| OGSR Gunslinger Addon 人工汉化（原文 `configs.db`，中文在 eng 槽） | 曾为 `Gunslinger 参考` 软层 5948 条；**1.9.19 整体退役** |
+| 《S.T.A.L.K.E.R.：普里皮亚季的呼唤》官方简体中文（主机版） | 1432 条并入标准分类 |
+| ANTHOLOGY 2.1 汉化整合包 | `ANTHOLOGY 参考` 148 条（软提示层） |
+| bilibili 《潜行者》中文 wiki 专有名词/神器表 | 24 条并入标准分类 |
+
+两个软参考层退役的依据是逐条语义抽检（明确错率约 31%：`HK`→香港、
+`Find %s for Cardan`→`寻找%s` 丢信息、`.45 Hydra-shock`→`.45 AP弹`、
+`Остров валунов`→`大沼泽. 露营点` ID 错配、绰号↔姓氏系统性错配）。
+退役数据留档在 2.x 姊妹仓库
+`stalker-localization-toolkit-ai-translate-2x` 的
+`corpus/soft_reference_retired.json`（含 `_meta.reason` 与出处），
+本仓库不再收录。
+
+> 如果你是上述任一来源的权利人，希望调整署名方式或要求移除相关数据，
+> 请在本仓库开 issue 说明，我们会配合处理。
 
 ## 5. 本仓库自身许可
 

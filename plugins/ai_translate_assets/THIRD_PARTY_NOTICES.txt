@@ -13,9 +13,20 @@
 2) llama.cpp（MIT）与 Hy-MT 模型（Apache-2.0）
    不随本插件分发，运行时按发布方官方 SHA-256 下载。
 
-3) 术语库语料
-   见仓库 tools/，包含《S.T.A.L.K.E.R.》游戏/模组原文，权利归原权利人，
-   仅用于构建本项目术语库。
+3) 术语库语料与人工汉化来源
+   随包术语库（stalker_termbase.json / glossary_builtin.json）的条目收割自
+   以下第三方文本，版权均归各自权利人；这些来源均未声明开源许可证，
+   本项目只保留来源署名，不主张任何额外授权：
+   - NS OGSR 系列汉化补丁（2019 / 2026-02-19 / 2026-06-19）——权威源
+   - GAMMA 汉化组（GSCTP）Anomaly 简体中文
+   - OGSR Gunslinger Addon 人工汉化（原文 configs.db，中文在 eng 槽）
+   - 《S.T.A.L.K.E.R. 潜行者：普里皮亚季的呼唤》官方简体中文（主机版）
+   - ANTHOLOGY 2.1 汉化整合包
+   - bilibili 《潜行者》中文 wiki 专有名词/神器表
+   仓库 corpus/ 收录了上述部分来源的完整文本，仅用于本地对齐收割与核验，
+   不随插件分发。2.0.22 起 Gunslinger / GAMMA 两个软参考层（13946 条）
+   已整体退出运行时词库，留档 corpus/soft_reference_retired.json。
+   如你是权利人并希望调整署名或移除相关内容，请通过仓库 issue 联系。
 
 完整说明见仓库根目录 THIRD_PARTY_NOTICES.md。
 如你是权利人并希望调整署名或移除相关代码，请通过仓库 issue 联系。

@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+sys.dont_write_bytecode = True   # 别把 .pyc 写进随包插件目录（发布门禁 A6 会判为运行产物）
 import tempfile
 import threading
 import time
@@ -75,7 +76,7 @@ TMP = tempfile.mkdtemp(prefix="ait_verify_")
 def t1_encoding():
     print("\n--- T1 编码判定链 ---")
     zh = "潜行者，去酒吧找一个神器。"          # UTF-8 中文字节里含 0x98
-    ru = "Привет, сталкер. Иди к Бару."        # 含 И(D0 98)
+    ru = "Привет, сталкер! Иди к Бару."        # 含 И(D0 98)
     wrong_decl = ('<?xml version="1.0" encoding="cp1251"?>\n'
                   '<string_table><string id="x"><rus>%s</rus></string>'
                   '</string_table>' % zh).encode("utf-8")
@@ -1682,7 +1683,7 @@ def _ref_tree():
             f.write(s)
 
     w(os.path.join("configs", "text", "rus", "table.xml"), """<string_table>
- <string id="dlg_1"><text>Привет, сталкер.</text></string>
+ <string id="dlg_1"><text>Привет, сталкер!</text></string>
  <string id="gen_1"><text>Ещё текст.</text></string>
  <string id="zh_1"><text>已经有中文</text></string>
  <string id="var_1"><text>$level $name 潜行者。</text></string>
@@ -1725,7 +1726,7 @@ def t35_reference_layer():
                                     "table.xml"), encoding="utf-8").read()
         check("T35-1 引用层自动解析并完成", ok)
         check("T35-2 被引用的俄文条目译成中文",
-              "译[Привет, сталкер.]" in text)
+              "译[Привет, сталкер!]" in text)
         check("T35-3 未被引用的俄文条目也译（默认不限制引用）",
               "译[Ещё текст.]" in text)
         check("T35-4 已中文条目不再送翻",
@@ -1827,7 +1828,7 @@ def t37_protected_text():
         check("T37-3 人名/正文不再整类跳过：%s" % s[:20],
               not ait.looks_like_protected_text(
                   "configs/text/character_name/table.xml", s))
-    for s in ("Привет, сталкер. Как дела?", "Настройки",
+    for s in ("Привет, сталкер! Как дела?", "Настройки",
               "Найди документы в подвале."):
         check("T37-4 正常正文不保护：%s" % s[:24],
               not ait.looks_like_protected_text(
@@ -1922,7 +1923,7 @@ def t40_source_tags_literals():
 
     w(os.path.join("configs", "text", "dialogs", "table.xml"), """<?xml version="1.0" encoding="utf-8"?>
 <string_table>
-<string id="a"><rus>Привет, сталкер.</rus><eng>Hello, stalker.</eng></string>
+<string id="a"><rus>Привет, сталкер!</rus><eng>Hello, wanderer.</eng></string>
 </string_table>
 """)
     w(os.path.join("configs", "ui", "test.xml"),
@@ -1937,7 +1938,7 @@ def t40_source_tags_literals():
         text = io.open(os.path.join(out, "configs", "text", "dialogs",
                                     "table.xml"), encoding="utf-8").read()
         check("T40-1 源语言默认 rus，不翻 eng",
-              "译[Привет, сталкер.]" in text and "Hello, stalker." in text
+              "译[Привет, сталкер!]" in text and "Hello, wanderer." in text
               and "译[Hello" not in text)
         check("T40-2 保留 <rus>/<eng> 标签（不再只剩 <text>）",
               "<rus>" in text and "<eng>" in text and "<text>" not in text)
@@ -2017,8 +2018,8 @@ def t42_script_context_and_english():
     print()
     print("--- T42 脚本上下文/英语源文/提示词回显 ---")
     check("T42-1 俄文/英文内容检测",
-          ait.detect_text_lang("Привет, сталкер.") == "rus"
-          and ait.detect_text_lang("Hello, stalker.") == "eng"
+          ait.detect_text_lang("Привет, сталкер!") == "rus"
+          and ait.detect_text_lang("Hello, wanderer.") == "eng"
           and ait.detect_text_lang("AK-74") == "")
     check("T42-2 语言全名用中文（不再把 English 塞进中文句）",
           ait.LANG_FULL.get("eng") == "英语"
@@ -2047,7 +2048,7 @@ def t42_script_context_and_english():
     with io.open(os.path.join(ind, "configs", "text", "rus", "eng.xml"), "w",
                  encoding="utf-8", newline="\n") as f:
         f.write('<string_table>\n'
-                '<string id="en1"><rus>Hello, stalker.</rus></string>\n'
+                '<string id="en1"><rus>Hello, wanderer.</rus></string>\n'
                 '</string_table>\n')
 
     class LangServer(_FakeServer):
@@ -2092,8 +2093,8 @@ def t42_script_context_and_english():
               and "译[Подсказка игроку]" in table
               and "译[Привет из скрипта.]" in table)
         check("T42-11 英语源文按 eng 送翻（字段是 rus 也不误导）",
-              ("Hello, stalker.", "eng") in srv.langs
-              and not any(t == "Hello, stalker." and s == "rus"
+              ("Hello, wanderer.", "eng") in srv.langs
+              and not any(t == "Hello, wanderer." and s == "rus"
                           for t, s in srv.langs))
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -3151,7 +3152,7 @@ def t64_scene_batch_and_style():
     ind = os.path.join(root, "in")
     out = os.path.join(root, "out")
     os.makedirs(os.path.join(ind, "configs", "text", "dialogs"))
-    srcs = ["Привет, сталкер.", "Что тебе нужно?", "Есть работёнка.",
+    srcs = ["Привет, сталкер!", "Что тебе нужно?", "Есть работёнка.",
             "Говори, я слушаю."]
     with io.open(os.path.join(ind, "configs", "text", "dialogs", "d.xml"),
                  "w", encoding="utf-8", newline=chr(10)) as f:
@@ -3214,7 +3215,7 @@ def t64_scene_batch_and_style():
             force_glossary=False, reference_mode=False,
             copy_reference=False, protect_proper=False,
             translate_literals=False, auto_session_terms=False, tm_lite=False)
-        job2._translate_one("Привет, сталкер.", "rus",
+        job2._translate_one("Привет, сталкер!", "rus",
                             context="前一句：Тест", style="dialogue")
         check("T64-6 逐条路径实际注入场景上下文和风格",
               cs.ctx == "前一句：Тест" and cs.style == "dialogue",

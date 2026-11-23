@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+sys.dont_write_bytecode = True   # 别把 .pyc 写进随包插件目录（发布门禁 A6 会判为运行产物）
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,7 +75,7 @@ def make_job():
 
 def main():
     # ---- 版本 ----
-    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18"),
+    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18", "1.9.19"),
           m.PLUGIN_INFO["version"])
 
     # ---- 英文粗口（#5）----
