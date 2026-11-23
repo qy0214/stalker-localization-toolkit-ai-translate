@@ -2982,7 +2982,11 @@ def t60_residual_cyrillic_retry():
         check("T60-1 残留俄文触发一次重试并采用纯中文结果",
               out == '你好，“法瓦”。' and len(calls) == 2,
               "%r calls=%d" % (out, len(calls)))
-        clean = _FakeServer(fn=lambda _t: "你好，“禁区”。")
+        # ★ 1.9.23：Зона 已升硬（高频硬词分类），强制术语会先替换成 $$T1$$。
+        # 夹具必须原样保留占位符，才能模拟真实模型行为（否则会走切片兜底）。
+        clean = _FakeServer(
+            fn=lambda t: '你好，“$$T1$$”。' if "$$T1$$" in t
+            else "你好，“禁区”。")
         job2 = ait.TranslationJob(
             ait._load_vendor(), clean, root, "auto", "auto", "chs",
             out_dir=os.path.join(root, "out2"),
