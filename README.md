@@ -4,11 +4,12 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.20（2026-11-23）**：同步 2.x 姊妹仓库的 2.0.23 界面选项精简——
-11 个勾选逐项核对后，4 个「关闭只有坏处」的收编为内部固定开启（识别 ID 引用层/
-输出完整补丁/TM-lite/会话词表），保留 5 个各挂一行开/关后果说明；
-强制术语/保护专名出厂默认改为开；引用层无文本表自动回退整目录模式
-（原先警告后终止）。词库 22524 条。
+**当前版本 1.9.21（2026-11-23）**：同步 2.x 姊妹仓库的 2.0.24（IWP 已翻译产物
+全量深度审计驱动的六项修复）——批量对话路径补齐占位符掩码/还原/数字/粘连/
+错位五重校验（P0）；「（原文数字/型号 …）」注记退役（中文纪年认可清零年代
+误报 + 定向重试 + 裸数字兜底 + 型号数字双注记修复）；粘连残词确定性闸门
+（克里门enko 类半音译）；短名回显定名指令兜底；汉字间空格收敛；未解析引用
+报告收紧。词库 22524 条。
 完整变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
@@ -52,8 +53,8 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.20.zip` | 可直接分发的插件包 |
-| `CHANGELOG.md` | 1.6.0–1.9.20 各版本完整修复明细与证据 |
+| `dist/ai_translate_plugin_v1.9.21.zip` | 可直接分发的插件包 |
+| `CHANGELOG.md` | 1.6.0–1.9.21 各版本完整修复明细与证据 |
 | `tests/` | 回归测试（契约/功能/各版本专项）+ 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -61,9 +62,9 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.20`
+- 插件版本：`ai_translate 1.9.21`
 - 当前 zip SHA-256：
-  `677992f272712b5f83255ea4b0d2165bfca0cbe6c2ef2593bb9efd418b1feb57`
+  `3546106c9eeaf48010a59d2633f245b590660385e48a8c358443cf528d331479`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 22524 条 / `stalker_termbase.json` 22524 条；
   11 个分类，两文件条目数一致；canon 4276 / names 3250 / technical 18 /
@@ -72,7 +73,7 @@ STALKER Localization Toolkit 1.1.0\
   2.x 仓库 `corpus/soft_reference_retired.json`，不参与直取与提示
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.20.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.21.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
@@ -83,6 +84,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.20.zip' -Algorithm SHA256
 
 | 版本 | 摘要 |
 |---|---|
+| **1.9.21** | 同步 2.0.24（IWP 全量深度审计驱动）：批量对话路径补齐占位符掩码/还原/数字/粘连/错位五重校验（P0，%c[default] 被译坏类运行期破坏的唯一来源）；「（原文数字/型号 …）」注记退役（中文纪年认可清零年代误报 + 定向重试 + 裸数字兜底 + 型号数字双注记修复）；粘连残词（克里门enko 类半音译）确定性闸门；短名回显定名指令兜底；汉字间空格收敛；未解析引用报告收紧。测试 9/9 全绿（新增 1.9.21 专项 27 项） |
 | **1.9.20** | 同步 2.0.23 界面选项精简：引用层/完整补丁/TM-lite/会话词表收编固定开启（关闭只有坏处），保留 5 项各挂一行开/关后果说明；强制术语/保护专名出厂默认改开；引用层无文本表自动回退整目录模式 |
 | **1.9.19** | 同步 2.0.22：GAMMA/Gunslinger 软层 13946 条整体退役（逐条语义抽检明确错率约 31%）、硬层子串替换加固（半中半英写出 112→0）、型号形态直取、藏宝点目录豁免、ogg/music 保护收窄、词库内容级修正 13 条、第三方署名补全；词库 22524 条，发布包 1.39→0.84 MB |
 | 1.9.19 | 全库确定性错误清理 14 条 + 垃圾过滤三处口径修正 + 闸门豁免色码内数字 + 专名保护硬层子串替换 |

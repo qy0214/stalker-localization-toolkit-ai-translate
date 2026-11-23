@@ -75,7 +75,7 @@ def make_job():
 
 def main():
     # ---- 版本 ----
-    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18", "1.9.19", "1.9.20"),
+    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18", "1.9.19", "1.9.20", "1.9.21"),
           m.PLUGIN_INFO["version"])
 
     # ---- 英文粗口（#5）----
@@ -222,8 +222,11 @@ def main():
           "_force_sliced(masked, lang, note=note)" in src_text)
     check("wire:pattern-in-table",
           "pattern_translate(src, termbase_exact_translation)" in src_text)
+    # ★ 1.9.21：调用形态变为多行 + skip=missing_model_tokens(...)
+    # （型号数字双注记修复），接线断言随之滚动。
     check("wire:patchnum-in-gate",
-          "patch_missing_numbers(normalized, out)" in src_text)
+          "patch_missing_numbers(" in src_text
+          and "skip=missing_model_tokens(normalized, out)" in src_text)
     check("wire:budget",
           "budget_max_tokens(len(text or \"\"), self.ctx_size)" in src_text)
 
