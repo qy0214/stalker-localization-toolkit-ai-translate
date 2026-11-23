@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.9.19
+插件版本：ai_translate 1.9.20
 
 
 一、怎么装（30 秒）
@@ -36,7 +36,7 @@ AI 离线翻译插件 · 分享包说明
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
 本插件 zip（ai_translate_plugin_v1.9.19.zip）：
-    677992f272712b5f83255ea4b0d2165bfca0cbe6c2ef2593bb9efd418b1feb57
+    16669e6010ca2ee45bdac1b7fb75d5fbd5ec8e3928df1390218a2f26c61b5b81
 
 PowerShell 校验：
     Get-FileHash .\ai_translate_plugin_v1.9.19.zip -Algorithm SHA256
