@@ -240,7 +240,21 @@ def t8_meta():
               "%d vs %d" % (cnt, len(d.get(cat, {}))))
     b = json.load(open(os.path.join(_ASSET_SRC, "glossary_builtin.json"),
                        encoding="utf-8"))
-    check("T8-两表条目数相等", len(b) == actual, "%d vs %d" % (len(b), actual))
+    # ★ 1.9.22（同步 2.0.25）：随包表允许混合结构（扁平条目 + 分类嵌套
+    # dict + _meta），条目数按摊平语义统计（旧 len(b) 口径会把「人工对照」
+    # 嵌套分类与 _meta 算成 2 个额外键）。
+    def _flat_all(table):
+        out = {}
+        for k, v in (table or {}).items():
+            if str(k).startswith("_"):
+                continue
+            if isinstance(v, dict):
+                out.update(_flat_all(v))
+            elif not isinstance(v, (list, tuple)):
+                out[str(k)] = str(v)
+        return out
+    check("T8-两表条目数相等", len(_flat_all(b)) == actual,
+          "%d vs %d" % (len(_flat_all(b)), actual))
 
 
 # ---------- T9 无术语强制路径的 note 透传 ----------

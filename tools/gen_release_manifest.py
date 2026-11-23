@@ -10,7 +10,7 @@
   python tools/gen_release_manifest.py
 
 范围：只针对仓库根部的 plugins/ 插件目录与
-dist/ai_translate_plugin_v1.9.21.zip，不扫描已清理的工具集源码/发行版。
+dist/ai_translate_plugin_v1.9.22.zip，不扫描已清理的工具集源码/发行版。
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ OUT_JSON = ROOT / "release_manifest.json"
 
 PLUGIN = ROOT / "plugins/ai_translate.py"
 ASSETS = ROOT / "plugins/ai_translate_assets"
-ZIP = ROOT / "dist/ai_translate_plugin_v1.9.21.zip"
+ZIP = ROOT / "dist/ai_translate_plugin_v1.9.22.zip"
 USAGE = ROOT / "使用说明.txt"
 TERM_DOC = ROOT / "术语库_处理记录.md"
 CASE_DOC = ROOT / "术语库_大小写冲突清单.md"
 
-EXPECTED_PLUGIN_VERSION = "1.9.21"
+EXPECTED_PLUGIN_VERSION = "1.9.22"
 
 # 2026-10-23 从 llama.cpp b11612 GitHub Release asset digest 取得。
 EXPECTED_LLAMA = {
@@ -215,7 +215,19 @@ def json_count(path: Path, meta_key: str | None = None) -> int | None:
         if isinstance(meta, dict) and isinstance(meta.get(meta_key), int):
             return int(meta[meta_key])
     if isinstance(data, dict):
-        return len([k for k in data if k != "_meta"])
+        # ★ 1.9.22（同步 2.0.25）：随包表允许混合结构（扁平条目 + 分类嵌套
+        # dict，如「人工对照」），按插件 flatten_glossary 同口径摊平计数。
+        def _flat_n(table):
+            n = 0
+            for k, v in table.items():
+                if str(k).startswith("_"):
+                    continue
+                if isinstance(v, dict):
+                    n += _flat_n(v)
+                else:
+                    n += 1
+            return n
+        return _flat_n(data)
     if isinstance(data, list):
         return len(data)
     return None
@@ -610,6 +622,41 @@ def render_markdown(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ★ 1.9.22（同步 2.0.25 流程）：可复现打包——固定时间戳 + 固定条目顺序
+# （同样的输入 ⇒ 同样的哈希），并同步 使用说明.txt 的版本号 / zip 文件名 /
+# zip SHA-256（一致性检查会核对这三处）。旧版本 zip 自动清理。
+ZIP_DATE = (2026, 11, 24, 0, 0, 0)
+
+
+def build_zip() -> str:
+    """重建 dist zip + 更新使用说明哈希，返回新 zip 的 SHA-256。"""
+    import zipfile
+    if not USAGE.is_file():
+        raise SystemExit("缺少 使用说明.txt，拒绝打包")
+    for old in ZIP.parent.glob("ai_translate_plugin_v*.zip"):
+        old.unlink()
+    with zipfile.ZipFile(ZIP, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel in sorted(ZIP_ENTRIES):
+            info = zipfile.ZipInfo(rel, date_time=ZIP_DATE)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, (ROOT / rel).read_bytes())
+    sha = sha256(ZIP)
+    usage = read_text(USAGE)
+    usage = re.sub(r"ai_translate_plugin_v[\d.]+\.zip",
+                   "ai_translate_plugin_v%s.zip" % EXPECTED_PLUGIN_VERSION,
+                   usage)
+    usage = re.sub(r"ai_translate \d+\.\d+\.\d+",
+                   "ai_translate %s" % EXPECTED_PLUGIN_VERSION, usage)
+    usage = re.sub(r"本 \d+\.\d+\.\d+ 分享包",
+                   "本 %s 分享包" % EXPECTED_PLUGIN_VERSION, usage)
+    usage = re.sub(
+        r"(本插件 zip（ai_translate_plugin_v[\d.]+\.zip）：\s*\r?\n\s*)[0-9a-f]{64}",
+        lambda m: m.group(1) + sha, usage)
+    USAGE.write_text(usage, encoding="utf-8", newline="\n")
+    return sha
+
+
 def compare_with_committed(data: dict[str, Any]) -> list[str]:
     """与已提交的 release_manifest.json 比对（忽略生成时间与 git 元信息）。"""
     if not OUT_JSON.is_file():
@@ -626,6 +673,10 @@ def main() -> int:
     if not PLUGIN.is_file():
         print("找不到插件：%s" % PLUGIN, file=sys.stderr)
         return 2
+    if "--build" in sys.argv:
+        sha = build_zip()
+        print("已打包：%s" % ZIP)
+        print("插件 zip SHA-256：%s" % sha)
     if "--check" in sys.argv:
         # CI 门禁：只校验、不写文件。生成时间每次不同，因此不做整文件 diff；
         # 只比对实质内容（版本/产物哈希/zip/官哈希/术语规模）。

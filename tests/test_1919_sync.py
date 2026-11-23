@@ -29,7 +29,8 @@ def check(name, ok, detail=""):
     return ok
 
 # ── 1 版本 ──────────────────────────────────────────────────────
-check("version:1.9.19+", m.PLUGIN_INFO["version"] in ("1.9.19", "1.9.20", "1.9.21"),
+check("version:1.9.19+",
+      m.PLUGIN_INFO["version"] in ("1.9.19", "1.9.20", "1.9.21", "1.9.22"),
       m.PLUGIN_INFO["version"])
 
 # ── 2 软层退役 ──────────────────────────────────────────────────
@@ -46,11 +47,17 @@ check("_meta.layers.reference 不含软层",
 check("_DEFAULT_LAYERS.reference 不含软层",
       not any(c in m._DEFAULT_LAYERS["reference"] for c in soft),
       m._DEFAULT_LAYERS["reference"])
-for src in ("HK USP Match", "Find %s for Cardan", "Вставить",
+for src in ("HK USP Match", "Вставить",
             ".45 Hydra-shock", "Остров валунов", "HK G36", "FN P90"):
     check("直取不再命中软层误译 %r" % src,
           m.termbase_lookup(src) is None and src not in gb,
           m.termbase_lookup(src))
+# ★ 1.9.22（同步 2.0.25）：'Find %s for Cardan' 被 CHS 人工对照收割
+# （译名"为卡丹找到%s"不丢信息，优于旧软层误译"寻找%s"）——从"必须
+# None"清单移到人工对照命中断言。
+check("人工对照命中 Find %s for Cardan",
+      m.termbase_lookup("Find %s for Cardan") == "为卡丹找到%s",
+      m.termbase_lookup("Find %s for Cardan"))
 check("垃圾键 '.' 已不存在", m.termbase_lookup(".") is None and "." not in gb)
 check("垃圾键 '...' 已删除", m.termbase_lookup("...") is None)
 
@@ -60,7 +67,11 @@ n_cat = sum(len(v) for k, v in tb.items()
 check("_meta.total_entries == 分类求和",
       tb["_meta"]["total_entries"] == n_cat,
       "%s / %d" % (tb["_meta"]["total_entries"], n_cat))
-check("扁平镜像条数 == 分类求和", len(gb) == n_cat, "%d / %d" % (len(gb), n_cat))
+# ★ 1.9.22（同步 2.0.25）：随包表允许混合结构（扁平条目 + 分类嵌套
+# dict + _meta），条目数按插件 flatten_glossary 摊平语义统计。
+check("扁平镜像条数 == 分类求和",
+      len(m.flatten_glossary(gb)) == n_cat,
+      "%d / %d" % (len(m.flatten_glossary(gb)), n_cat))
 for k, want in (("Лейтенант «Аспирин» Сострадов", "“阿司匹林”索斯特拉多夫中尉"),
                 ("Осведомителю", "线人"), ("Енот", "浣熊"),
                 ("Mangun", "曼冈"), ("Учёный «О-Сознания»", "“共同意识”科学家"),

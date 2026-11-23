@@ -2,7 +2,7 @@ AI 离线翻译插件 · 分享包说明
 ================================
 
 适用工具集：STALKER Localization Toolkit 1.1.0（六个图形化栏目那个 Hub）
-插件版本：ai_translate 1.9.21
+插件版本：ai_translate 1.9.22
 
 
 一、怎么装（30 秒）
@@ -35,14 +35,14 @@ AI 离线翻译插件 · 分享包说明
 工具集 exe（1.1.0 build_60，历史发布物）：
     171ce0028151d06b9d28bab4b671d6df957451a3fa6241d0b6cb9543b22e6947
 
-本插件 zip（ai_translate_plugin_v1.9.21.zip）：
-    3546106c9eeaf48010a59d2633f245b590660385e48a8c358443cf528d331479
+本插件 zip（ai_translate_plugin_v1.9.22.zip）：
+    718997af6db2adbe919ca890f1674f9bc65acfbfe89855325ea1cbe3f9663b23
 
 PowerShell 校验：
-    Get-FileHash .\ai_translate_plugin_v1.9.21.zip -Algorithm SHA256
+    Get-FileHash .\ai_translate_plugin_v1.9.22.zip -Algorithm SHA256
 
 说明：exe 哈希取自清理前生成的发布清单；如果你手上的 exe 不是同一构建，
-请以那次发布清单为准。插件 zip 哈希对应本 1.9.21 分享包。
+请以那次发布清单为准。插件 zip 哈希对应本 1.9.22 分享包。
 插件运行时下载的 llama.cpp 运行库与模型，也会在下载后按发布方官方
 SHA-256 校验（llama.cpp b11612 GitHub Release digest / HuggingFace LFS
 oid）；不一致会删除该文件并自动换源。
@@ -55,7 +55,7 @@ oid）；不一致会删除该文件并自动换源。
     ai_translate.py                      插件本体，纯 Python 标准库
     ai_translate_assets\xray_pkg.zip     解析 X-Ray 文本 XML/LTX/脚本所必需
     ai_translate_assets\stalker_termbase.json   术语基表（分类格式，导入用）
-    ai_translate_assets\glossary_builtin.json   随包术语库（9059 条，只读）
+    ai_translate_assets\glossary_builtin.json   随包术语库（24456 条，只读）
     ai_translate_assets\THIRD_PARTY_NOTICES.txt 第三方来源与许可状态（必读）
                                                   用户自己的增删改记在 glossary_user.json（不随包）
 
@@ -70,7 +70,7 @@ oid）；不一致会删除该文件并自动换源。
 的硬件与网络重新选档和测速选源，不会继承别人的设置。
 本包内不含任何绝对路径、用户名或本机设置项，已由自动化测试逐项核对。
 
-`ai_translate.py` 当前 7080 行（开发注释已大幅精简，保留必要的安全说明；
+`ai_translate.py` 当前 8054 行（开发注释已大幅精简，保留必要的安全说明；
 函数与类文档字符串保留）。本版新增的官方 SHA-256 校验已通过 346 项回归测试
 和定向篡改测试（正确哈希通过、错误哈希删除并拒绝）。
 
@@ -265,10 +265,10 @@ oid）；不一致会删除该文件并自动换源。
 
 五、术语库（已随包附带）
 ------------------------
-包内已附带两份术语数据（9059 条），都可用界面上的「导入JSON」加载：
+包内已附带两份术语数据（24456 条），都可用界面上的「导入JSON」加载：
 
     stalker_termbase.json   分类格式：{"分类名": {"原文": "译文"}}
-    glossary_builtin.json   扁平格式：{"原文": "译文"}（上面那份展开后的结果）
+    glossary_builtin.json   运行时格式：扁平条目 + 分类段混合（上面那份展开后的结果）
 
 术语分两层，升级不会丢你自己的词条：
   · glossary_builtin.json = 随包只读层，新版本会整体替换（正常术语更新）；
@@ -283,10 +283,11 @@ oid）；不一致会删除该文件并自动换源。
 
 v2 分层说明（随包库，不需要你手工维护）：
 
-    canon       阵营/地点/变异体/物品 1400 条，强制+提示
-    names       人物与军衔 3067 条，只做整条精确/首字母大写软提示
+    canon       阵营/地点/变异体/物品 4276 条，强制+提示
+    names       人物与军衔 5182 条（1.9.22 起含「人工对照」1932 条：
+                人工翻译包按条目 id 对照收割），只做整条精确/首字母大写软提示
     technical   单位/缩写 18 条，只做整条精确
-    reference   ANTHOLOGY 参考 148 条，只做软参考
+    reference   ANTHOLOGY 参考 14980 条，只做软参考
 
 「重复句精确复用（TM-lite）」默认勾选：同一批文本里完全相同的句子达到
 20% 且不少于 40 条时才启用，只复用本次任务已经译好的同源译文；不联网、

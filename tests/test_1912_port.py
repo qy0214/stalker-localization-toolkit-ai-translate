@@ -75,7 +75,7 @@ def make_job():
 
 def main():
     # ---- 版本 ----
-    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18", "1.9.19", "1.9.20", "1.9.21"),
+    check("version:1.9.12", m.PLUGIN_INFO["version"] in ("1.9.12", "1.9.13", "1.9.14", "1.9.15", "1.9.16", "1.9.17", "1.9.18", "1.9.19", "1.9.20", "1.9.21", "1.9.22"),
           m.PLUGIN_INFO["version"])
 
     # ---- 英文粗口（#5）----
@@ -147,7 +147,12 @@ def main():
     r2, f2 = m.reconcile_literal_newlines(src_nl, "$clr_1A" + NL + "$clr_2B翻")
     check("litnl:same", not f2)
     r3, f3 = m.reconcile_literal_newlines("无换行", "多" + NL + NL + "行")
-    check("litnl:src0-untouched", not f3)
+    # ★ 1.9.22（同步 2.0.25）：源 0 → 译 ≤2 的"多余换行"从保留改为收敛
+    # 为空格（实测 11 条漏过串段闸门原样落盘）；>2 仍交串段闸门。
+    check("litnl:extra-collapsed",
+          f3 and m.count_literal_newlines(r3) == 0, repr(r3))
+    r6, f6 = m.reconcile_literal_newlines("无换行", "多" + NL + NL + NL + "行")
+    check("litnl:extra-many-left", not f6)
     r4, f4 = m.reconcile_literal_newlines("a" + NL + NL + "b",
                                           "a" + NL + NL + NL + "b")
     check("litnl:collapse", f4 and m.count_literal_newlines(r4) == 2, repr(r4))

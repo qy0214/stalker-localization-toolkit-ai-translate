@@ -274,13 +274,26 @@ def main():
         builtin = json.load(io.open(BUILTIN, encoding="utf-8"))
     except Exception:
         pass
+    # ★ 1.9.22（同步 2.0.25）：随包表允许混合结构（扁平条目 + 分类嵌套
+    # dict，如新分类「人工对照」）与 _meta——逐键摊平后再与分类库比较，
+    # 键值直取的旧口径会把嵌套分类整段判为不一致。
+    def _flat_any(table, out):
+        for k, v in (table or {}).items():
+            if str(k).startswith("_"):
+                continue
+            if isinstance(v, dict):
+                _flat_any(v, out)
+            elif not isinstance(v, (list, tuple)):
+                out[str(k)] = str(v)
+        return out
+    builtin_flat = _flat_any(builtin, {})
     add(rows, "blocking" if not all(x[1] for x in copies) else "ok",
         "copy_sync", "工具库与随包副本：" + "；".join(
             "%s=%s" % (os.path.relpath(p, ROOT), "一致" if ok else "不一致")
             for p, ok in copies))
-    add(rows, "blocking" if builtin != flat else "ok", "builtin_sync",
+    add(rows, "blocking" if builtin_flat != flat else "ok", "builtin_sync",
         "glossary_builtin.json 与分类库摊平结果：%s"
-        % ("一致" if builtin == flat else "不一致"))
+        % ("一致" if builtin_flat == flat else "不一致"))
 
     # 8) 统计 ------------------------------------------------------------
     summary = {
