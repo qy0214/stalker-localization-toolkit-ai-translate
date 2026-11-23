@@ -2741,8 +2741,8 @@ def t55_english_item_audit():
           and item.get("Army body armor") == "军用防弹背心"
           and item.get("Anomalous stabilizer") == "异常稳定器")
     check("T55-4 俄文/英文对应实体修正",
-          item.get("Mama's Beads") == "妈妈的项链"
-          and item.get("Мамины бусы") == "妈妈的项链"
+          item.get("Mama's Beads") == "妈妈的念珠"
+          and item.get("Мамины бусы") == "妈妈的念珠"
           and item.get("Monolith Shard") == "黑石碎片"
           and item.get("Осколок Монолита") == "黑石碎片"
           and item.get("Borov's trench coat") == "博罗夫的军大衣")

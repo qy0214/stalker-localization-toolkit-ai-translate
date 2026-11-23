@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-11-24T05:07:23+08:00",
+  "generated_at": "2026-11-24T05:22:29+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "c10d661",
+    "commit": "a797e14",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
-      "D dist/ai_translate_plugin_v1.9.22.zip",
+      " D dist/ai_translate_plugin_v1.9.23.zip",
       " M plugins/ai_translate.py",
       " M plugins/ai_translate_assets/glossary_builtin.json",
       " M plugins/ai_translate_assets/stalker_termbase.json",
@@ -17,14 +17,17 @@
       " M tests/test_1919_sync.py",
       " M tests/test_1921_sync.py",
       " M tests/test_1922_sync.py",
+      " M tests/test_ai_translate_fixes.py",
       " M tools/stalker_termbase.json",
+      " M tools/termbase_audit.json",
+      " M tools/termbase_audit_report.md",
       " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\"",
-      "?? dist/ai_translate_plugin_v1.9.23.zip"
+      "?? dist/ai_translate_plugin_v1.9.24.zip"
     ]
   },
   "versions": {
-    "plugin_version": "1.9.23",
-    "expected_plugin_version": "1.9.23",
+    "plugin_version": "1.9.24",
+    "expected_plugin_version": "1.9.24",
     "target_toolkit": "STALKER Localization Toolkit 1.1.0",
     "historical_exe_version": "1.1.0.0"
   },
@@ -34,31 +37,31 @@
       "path": "plugins\\ai_translate.py",
       "exists": true,
       "size": 390657,
-      "sha256": "58c96220075c07cb8ac9b3f4bd79a7cc70c62c77698b5c7796c48462b3d493e6",
+      "sha256": "9df315bdfd463b714041ed44049569ed1e8b7a40aa99aa827a028cce8c0518cb",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
-      "path": "dist\\ai_translate_plugin_v1.9.23.zip",
+      "path": "dist\\ai_translate_plugin_v1.9.24.zip",
       "exists": true,
-      "size": 959609,
-      "sha256": "24f7993de43e530846e20eaf00f0a5ade1b59add7ca7fa40079e5738e178c2ce",
+      "size": 959908,
+      "sha256": "84f708102d176ae6f3ba8da2398c6698c13816859e4c3da90c8ab1cd309d049f",
       "note": "当前发布包"
     },
     {
       "role": "术语库（随包，只读）",
       "path": "plugins\\ai_translate_assets\\glossary_builtin.json",
       "exists": true,
-      "size": 1208207,
-      "sha256": "2952e90770f06b67f3222dd8066707a1e4ae1f09a97dae76342647d3452023e0",
+      "size": 1210784,
+      "sha256": "387a6ce17117b99cd9c03d5efe598a3c2e96851e222a83021affe2c185009d3a",
       "note": "运行时匹配的内置层"
     },
     {
       "role": "术语基表（分类）",
       "path": "plugins\\ai_translate_assets\\stalker_termbase.json",
       "exists": true,
-      "size": 1215571,
-      "sha256": "9bfc8b7f08a41d1d708551594677c34eae92d81b294a407f3dabcb6feaa1566f",
+      "size": 1218148,
+      "sha256": "9537e729411eaf04ac939c517974ceaf44514392360dcbeb83879a909880385b",
       "note": "导入用"
     },
     {
@@ -82,7 +85,7 @@
       "path": "使用说明.txt",
       "exists": true,
       "size": 31653,
-      "sha256": "237e81679f156083b3d183672271462fe22478e00396219846ad3b1fd6332bf4",
+      "sha256": "278131eb7234c1e506103dccc3e37134f7af9ab8c68589adb381bc6938420614",
       "note": "含发布包 SHA-256"
     },
     {
@@ -111,8 +114,8 @@
     }
   ],
   "zip": {
-    "path": "dist\\ai_translate_plugin_v1.9.23.zip",
-    "sha256": "24f7993de43e530846e20eaf00f0a5ade1b59add7ca7fa40079e5738e178c2ce",
+    "path": "dist\\ai_translate_plugin_v1.9.24.zip",
+    "sha256": "84f708102d176ae6f3ba8da2398c6698c13816859e4c3da90c8ab1cd309d049f",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -168,12 +171,12 @@
     {
       "check": "插件版本 == 预期",
       "ok": true,
-      "detail": "PLUGIN_INFO 1.9.23 / 预期 1.9.23"
+      "detail": "PLUGIN_INFO 1.9.24 / 预期 1.9.24"
     },
     {
       "check": "zip 文件名含插件版本",
       "ok": true,
-      "detail": "ai_translate_plugin_v1.9.23.zip"
+      "detail": "ai_translate_plugin_v1.9.24.zip"
     },
     {
       "check": "zip 条目 == 5 个预期文件",
@@ -253,12 +256,12 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "24f7993de43e5308…"
+      "detail": "84f708102d176ae6…"
     },
     {
       "check": "使用说明含插件版本",
       "ok": true,
-      "detail": "ai_translate 1.9.23"
+      "detail": "ai_translate 1.9.24"
     },
     {
       "check": "dist 只保留当前版本 zip",
@@ -329,6 +332,6 @@
   },
   "tracked": {
     "files": 91,
-    "bytes": 24203787
+    "bytes": 24214677
   }
 }

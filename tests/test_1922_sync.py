@@ -86,7 +86,7 @@ def make_job(srv, **kw):
 
 
 # ── 1 版本 ──────────────────────────────────────────────────────
-check("version:1.9.22+", ait.PLUGIN_INFO["version"] in ("1.9.22", "1.9.23"),
+check("version:1.9.22+", ait.PLUGIN_INFO["version"] in ("1.9.22", "1.9.23", "1.9.24"),
       ait.PLUGIN_INFO["version"])
 
 # ── 2 id 形态豁免（P3/P5）──────────────────────────────────────
