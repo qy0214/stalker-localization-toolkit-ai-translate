@@ -29,7 +29,7 @@ def check(name, ok, detail=""):
     return ok
 
 # ── 1 版本 ──────────────────────────────────────────────────────
-check("version:1.9.19", m.PLUGIN_INFO["version"] == "1.9.19",
+check("version:1.9.19+", m.PLUGIN_INFO["version"] in ("1.9.19", "1.9.20"),
       m.PLUGIN_INFO["version"])
 
 # ── 2 软层退役 ──────────────────────────────────────────────────

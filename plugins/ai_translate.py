@@ -41,7 +41,7 @@ import urllib.parse
 PLUGIN_INFO = {
     "id": "ai_translate",
     "name": "AI 离线翻译（Hy-MT2 / 自选模型）",
-    "version": "1.9.19",
+    "version": "1.9.20",
     "author": "local",
     "description": "本地离线模型翻译 X-Ray 文本；解压即用、零环境依赖；"
                    "混元两档内置模型自动测速下载；支持自选任意 GGUF 模型；"
@@ -1505,8 +1505,8 @@ DEFAULT_CONFIG = {
     "reuse_dir": "",
     "glossary": "",
     "force_glossary": True,
-    "glossary_force": False,
-    "protect_proper_v2": False,
+    "glossary_force": True,
+    "protect_proper_v2": True,
     "src_lang": "auto",
     "mode": "auto",
     "session_glossary": True,
@@ -5434,6 +5434,19 @@ class TranslationJob(object):
         try:
             if self.reference_mode and self.mode in ("auto", "text"):
                 ok = self._run_reference_layer(done_dir, reuse)
+                if (not ok and self.mode == "auto"
+                        and not self._table_entries
+                        and not self._cancelled()):
+                    # ★ 1.9.20：引用层收编为固定模式后，没有 configs/text
+                    # 文本表的 MOD（纯脚本/ltx）自动回退整目录模式，不再
+                    # 警告后终止。引用索引为空，only_referenced 若开着会把
+                    # 所有条目过滤掉，回退时强制关闭。
+                    if self.only_referenced:
+                        self.log("无引用索引，「只译被引用条目」在回退模式下不生效",
+                                 "warn")
+                    self.only_referenced = False
+                    self.log("回退：按整目录直接翻译模式继续", "warn")
+                    ok = self._run_auto(done_dir, reuse)
             elif self.mode == "auto":
                 ok = self._run_auto(done_dir, reuse)
             elif self.mode == "text":
@@ -5726,8 +5739,7 @@ class TranslationJob(object):
     def _run_reference_layer(self, done_dir, reuse):
         self._build_text_index()
         if not self._table_entries:
-            self.log("没有找到 configs/text 文本表；引用层模式无法继续",
-                     "warn")
+            self.log("没有找到 configs/text 文本表", "warn")
             return False
         self._scan_references()
         total, todo, protected = self._reference_candidates()
@@ -7347,32 +7359,28 @@ class AiTranslateTab(object):
         _combo_set(self.lang_combo, lang_vals, li)
         self.force_chk = self._reg(ui.checkbox(r3, "强制术语", on_toggle=None))
         ui.pack(self.force_chk, side="left")
-        _chk_set(self.force_chk, self.cfg.get("glossary_force", False))
+        _chk_set(self.force_chk, self.cfg.get("glossary_force", True))
 
-        # 引用层选项：默认自动识别 ID 引用、输出完整补丁、保护专名。
-        # 不写死任何 MOD 路径；开关都可在界面改，并写入 config.json。
+        # 选项区（★ 1.9.20 精简）：只保留真正需要用户取舍的开关，每项下
+        # 挂一行开/关后果说明。引用层/完整补丁/TM-lite/会话词表已收编为
+        # 内部固定开启（关闭只有坏处，见 on_run 与各收编点注释）。
         r4 = self._reg(ui.row(p))
         ui.pack(r4, fill="x", pady=1)
-        ui.pack(ui.label(r4, "引用层："), side="left")
-        self.ref_chk = self._reg(ui.checkbox(
-            r4, "识别 ID 引用层（推荐）", on_toggle=None))
-        ui.pack(self.ref_chk, side="left", padx=(0, 6))
-        _chk_set(self.ref_chk, self.cfg.get("reference_layer", True))
-        self.copy_ref_chk = self._reg(ui.checkbox(
-            r4, "输出完整补丁（复制引用层）", on_toggle=None))
-        ui.pack(self.copy_ref_chk, side="left", padx=(0, 6))
-        _chk_set(self.copy_ref_chk, self.cfg.get("copy_reference", True))
         self.only_ref_chk = self._reg(ui.checkbox(
             r4, "只译被引用条目", on_toggle=None))
         ui.pack(self.only_ref_chk, side="left")
         _chk_set(self.only_ref_chk, self.cfg.get("only_referenced", False))
+        h4 = self._reg(ui.row(p))
+        ui.pack(h4, fill="x", pady=(0, 1))
+        ui.pack(ui.label(h4, "　开：游戏没引用到的条目不送模型（省请求）；关：全量翻译，动态引用更保险"),
+                side="left")
 
         r5 = self._reg(ui.row(p))
         ui.pack(r5, fill="x", pady=(0, 1))
         self.protect_chk = self._reg(ui.checkbox(
             r5, "保护专名/歌名/型号", on_toggle=None))
         ui.pack(self.protect_chk, side="left", padx=(0, 6))
-        _chk_set(self.protect_chk, self.cfg.get("protect_proper_v2", False))
+        _chk_set(self.protect_chk, self.cfg.get("protect_proper_v2", True))
         self.preview_chk = self._reg(ui.checkbox(
             r5, "先预览（不写盘）", on_toggle=None))
         ui.pack(self.preview_chk, side="left")
@@ -7381,19 +7389,11 @@ class AiTranslateTab(object):
             r5, "翻译脚本/XML 字面文本", on_toggle=None))
         ui.pack(self.literal_chk, side="left", padx=(6, 0))
         _chk_set(self.literal_chk, self.cfg.get("translate_literals", True))
-
-        r6 = self._reg(ui.row(p))
-        ui.pack(r6, fill="x", pady=(1, 0))
-        self.session_chk = self._reg(ui.checkbox(
-            r6, "自动生成当前MOD会话词表（名字/物品/地点，本机缓存）",
-            on_toggle=None))
-        ui.pack(self.session_chk, side="left")
-        _chk_set(self.session_chk, self.cfg.get("session_glossary", True))
-        self.tm_chk = self._reg(ui.checkbox(
-            r6, "重复句精确复用（TM-lite，高重复时自动）",
-            on_toggle=None))
-        ui.pack(self.tm_chk, side="left", padx=(10, 0))
-        _chk_set(self.tm_chk, self.cfg.get("tm_lite", True))
+        h5 = self._reg(ui.row(p))
+        ui.pack(h5, fill="x", pady=(0, 1))
+        ui.pack(ui.label(h5, "　保护专名：开=人名/歌名/型号整条跳过模型只做子串替换；关=全部送模型可能被改写。"
+                         "字面文本：关=脚本/UI 里写死的文字不翻。先预览：试运行只统计不写盘"),
+                side="left")
 
         ex1 = self._reg(ui.row(p))
         ui.pack(ex1, fill="x", pady=(3, 0))
@@ -7629,14 +7629,10 @@ class AiTranslateTab(object):
         except Exception:
             pass
         for key, widget in (
-                ("reference_layer", self.ref_chk),
-                ("copy_reference", self.copy_ref_chk),
                 ("only_referenced", self.only_ref_chk),
                 ("protect_proper_v2", self.protect_chk),
                 ("preview_reference", self.preview_chk),
-                ("translate_literals", self.literal_chk),
-                ("session_glossary", self.session_chk),
-                ("tm_lite", self.tm_chk)):
+                ("translate_literals", self.literal_chk)):
             try:
                 self.cfg[key] = _chk_get(widget)
             except Exception:
@@ -8414,8 +8410,8 @@ class AiTranslateTab(object):
         # 只给模型/强制路径提供专名类硬术语；对话/百科类普通词不注入。
         hard_glossary = load_hard_glossary_keys() | set(self._gloss_set)
         hard_glossary = hard_glossary or None
-        ref_mode = False
-        copy_ref = True
+        ref_mode = True      # ★ 1.9.20：引用层/完整补丁/TM-lite/会话词表
+        copy_ref = True      #   收编固定开启（关闭只有坏处），不再读勾选。
         only_ref = False
         protect_proper = False
         preview_ref = False
@@ -8423,14 +8419,10 @@ class AiTranslateTab(object):
         session_glossary = True
         tm_lite = True
         try:
-            ref_mode = bool(_chk_get(self.ref_chk))
-            copy_ref = bool(_chk_get(self.copy_ref_chk))
             only_ref = bool(_chk_get(self.only_ref_chk))
             protect_proper = bool(_chk_get(self.protect_chk))
             preview_ref = bool(_chk_get(self.preview_chk))
             translate_literals = bool(_chk_get(self.literal_chk))
-            session_glossary = bool(_chk_get(self.session_chk))
-            tm_lite = bool(_chk_get(self.tm_chk))
         except Exception:
             pass
 

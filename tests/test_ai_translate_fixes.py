@@ -1889,13 +1889,23 @@ def t39_reference_wiring():
     print("--- T39 引用层接线 ---")
     import inspect
     src_build = inspect.getsource(ait.AiTranslateTab._build_step_job)
-    for key in ("reference_layer", "copy_reference", "only_referenced",
-                "protect_proper", "preview_reference"):
+    # ★ 1.9.20：引用层/完整补丁/TM-lite/会话词表收编固定开启，
+    # 界面只保留真正需取舍的开关。
+    for key in ("glossary_force", "only_referenced", "protect_proper_v2",
+                "preview_reference", "translate_literals"):
         check("T39-1 界面选项存在：%s" % key, key in src_build)
+    src_on_run = inspect.getsource(ait.AiTranslateTab.on_run)
+    check("T39-1b 收编开关固定开启",
+          "ref_mode = True" in src_on_run and "copy_ref = True" in src_on_run
+          and "session_glossary = True" in src_on_run
+          and "tm_lite = True" in src_on_run)
     src_run = inspect.getsource(ait.AiTranslateTab.on_run)
     check("T39-2 任务传入引用层开关", "reference_mode=ref_mode" in src_run)
     src_job = inspect.getsource(ait.TranslationJob.run)
     check("T39-3 自动/文本模式走引用层", "_run_reference_layer" in src_job)
+    check("T39-3b 无文本表自动回退整目录模式",
+          "_run_auto(done_dir, reuse)" in src_job
+          and "回退：按整目录直接翻译模式继续" in src_job)
     src_tok = inspect.getsource(ait.TranslationJob._translate_one)
     check("T39-4 翻译入口强制 mask 占位符",
           "mask_runtime_tokens" in src_tok

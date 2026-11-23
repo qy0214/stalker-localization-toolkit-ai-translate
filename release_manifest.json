@@ -1,38 +1,28 @@
 {
-  "generated_at": "2026-11-23T15:38:59+08:00",
+  "generated_at": "2026-11-23T17:11:57+08:00",
   "workspace": ".",
   "scope": "AI 离线翻译插件（ai_translate）",
   "git": {
     "branch": "main",
-    "commit": "990d732",
+    "commit": "4dd2996",
     "single_commit": false,
     "dirty": true,
     "dirty_files": [
       "M README.md",
-      " M THIRD_PARTY_NOTICES.md",
-      " D dist/ai_translate_plugin_v1.9.18.zip",
+      " D dist/ai_translate_plugin_v1.9.19.zip",
       " M plugins/ai_translate.py",
-      " M plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
-      " M plugins/ai_translate_assets/glossary_builtin.json",
-      " M plugins/ai_translate_assets/stalker_termbase.json",
-      " M tests/test_1911_port.py",
       " M tests/test_1912_port.py",
       " M tests/test_1913_port.py",
-      " M tests/test_1918_iwp_gates.py",
+      " M tests/test_1919_sync.py",
       " M tests/test_ai_translate_fixes.py",
-      " M tests/test_share_package.py",
-      " M tools/stalker_termbase.json",
-      " M tools/termbase_audit.json",
-      " M tools/termbase_audit_report.md",
       " M \"\\344\\275\\277\\347\\224\\250\\350\\257\\264\\346\\230\\216.txt\"",
-      "?? CHANGELOG.md",
-      "?? dist/ai_translate_plugin_v1.9.19.zip",
-      "?? tests/test_1919_sync.py"
+      "?? dist/ai_translate_plugin_v1.9.20.zip",
+      "?? tests/test_1920_options_ui.py"
     ]
   },
   "versions": {
-    "plugin_version": "1.9.19",
-    "expected_plugin_version": "1.9.19",
+    "plugin_version": "1.9.20",
+    "expected_plugin_version": "1.9.20",
     "target_toolkit": "STALKER Localization Toolkit 1.1.0",
     "historical_exe_version": "1.1.0.0"
   },
@@ -41,16 +31,16 @@
       "role": "插件分享副本",
       "path": "plugins\\ai_translate.py",
       "exists": true,
-      "size": 375431,
-      "sha256": "9b89f95e317cb9099aca60d434b8c6626a5c48d9e59b59c6e619a0d91958c7d0",
+      "size": 375506,
+      "sha256": "43e445bab0c1e7cdabc00f442c194ef9a4770b5887b7c06cbb417b10aaf25d63",
       "note": "纯标准库，保留必要安全说明"
     },
     {
       "role": "插件发布 zip",
-      "path": "dist\\ai_translate_plugin_v1.9.19.zip",
+      "path": "dist\\ai_translate_plugin_v1.9.20.zip",
       "exists": true,
-      "size": 878991,
-      "sha256": "677992f272712b5f83255ea4b0d2165bfca0cbe6c2ef2593bb9efd418b1feb57",
+      "size": 868954,
+      "sha256": "16669e6010ca2ee45bdac1b7fb75d5fbd5ec8e3928df1390218a2f26c61b5b81",
       "note": "当前发布包"
     },
     {
@@ -90,7 +80,7 @@
       "path": "使用说明.txt",
       "exists": true,
       "size": 31456,
-      "sha256": "458d595d9b74d6b3bcea463f9d179020436d73433d72bea52150b25fbe573ca3",
+      "sha256": "0b4e73637bd87acd4b3804dad2f85fd8603da99944053922c58660cf7eee1401",
       "note": "含发布包 SHA-256"
     },
     {
@@ -119,8 +109,8 @@
     }
   ],
   "zip": {
-    "path": "dist\\ai_translate_plugin_v1.9.19.zip",
-    "sha256": "677992f272712b5f83255ea4b0d2165bfca0cbe6c2ef2593bb9efd418b1feb57",
+    "path": "dist\\ai_translate_plugin_v1.9.20.zip",
+    "sha256": "16669e6010ca2ee45bdac1b7fb75d5fbd5ec8e3928df1390218a2f26c61b5b81",
     "entries": [
       "plugins/ai_translate.py",
       "plugins/ai_translate_assets/THIRD_PARTY_NOTICES.txt",
@@ -176,12 +166,12 @@
     {
       "check": "插件版本 == 预期",
       "ok": true,
-      "detail": "PLUGIN_INFO 1.9.19 / 预期 1.9.19"
+      "detail": "PLUGIN_INFO 1.9.20 / 预期 1.9.20"
     },
     {
       "check": "zip 文件名含插件版本",
       "ok": true,
-      "detail": "ai_translate_plugin_v1.9.19.zip"
+      "detail": "ai_translate_plugin_v1.9.20.zip"
     },
     {
       "check": "zip 条目 == 5 个预期文件",
@@ -261,12 +251,12 @@
     {
       "check": "使用说明含当前 zip SHA-256",
       "ok": true,
-      "detail": "677992f272712b5f…"
+      "detail": "16669e6010ca2ee4…"
     },
     {
       "check": "使用说明含插件版本",
       "ok": true,
-      "detail": "ai_translate 1.9.19"
+      "detail": "ai_translate 1.9.20"
     },
     {
       "check": "dist 只保留当前版本 zip",
@@ -334,7 +324,7 @@
     "note": "2026-10-23 清单记录；文件已在清理中移除"
   },
   "tracked": {
-    "files": 85,
-    "bytes": 23789908
+    "files": 87,
+    "bytes": 23816160
   }
 }
