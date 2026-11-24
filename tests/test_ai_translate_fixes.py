@@ -375,9 +375,8 @@ def t5_pipeline():
                            os.path.join(TMP, "t5out", "__temp__", "text",
                                         "ui_st.xml"),
                            {}, 1, 1)
-    check("T5-1 解析不出条目时保留既有译文（旧实现会删除）",
-          n == 0 and os.path.exists(out_xml)
-          and "旧译文" in open(out_xml, encoding="utf-8").read())
+    check("T5-1 解析不出条目时不生成零变化输出",
+          n == 0 and not os.path.exists(out_xml))
 
     # 5-2 空占位输出 → 清理
     empty_src = os.path.join(d, "text", "empty.xml")
@@ -1864,9 +1863,9 @@ def t38_noop_bom_preview():
     srv = _FakeServer()
     try:
         job, ok, _logs = _run_ref_job(ait, ind, out, srv)
-        got = open(os.path.join(out, "configs", "text", "rus",
-                                "table.xml"), "rb").read()
-        check("T38-1 无改动表逐字节复制（BOM/注释不变）", got == raw)
+        path_out = os.path.join(out, "configs", "text", "rus", "table.xml")
+        check("T38-1 无改动表不生成零变化输出",
+              not os.path.exists(path_out))
         check("T38-2 无改动不调用模型", not srv.calls, str(srv.calls))
         # 预览不写盘
         out2 = os.path.join(root, "out2")
@@ -1901,7 +1900,7 @@ def t39_reference_wiring():
           and "tm_lite = True" in src_on_run)
     src_run = inspect.getsource(ait.AiTranslateTab.on_run)
     check("T39-2 任务传入引用层开关", "reference_mode=ref_mode" in src_run)
-    src_job = inspect.getsource(ait.TranslationJob.run)
+    src_job = inspect.getsource(ait.TranslationJob._run_locked)
     check("T39-3 自动/文本模式走引用层", "_run_reference_layer" in src_job)
     check("T39-3b 无文本表自动回退整目录模式",
           "_run_auto(done_dir, reuse)" in src_job
@@ -2123,11 +2122,10 @@ def t42_script_context_and_english():
         job2, ok2, _ = _run_ref_job(ait, ind2, out2, echo_srv,
                                     translate_literals=False,
                                     protect_proper=False)
-        body = io.open(os.path.join(out2, "configs", "text", "rus",
-                                    "echo.xml"), encoding="utf-8").read()
-        check("T42-12 提示词回显被拦截并保留原文",
-              ok2 and "<rus>Привет</rus>" in body
-              and "你是《潜行者" not in body)
+        body_path = os.path.join(out2, "configs", "text", "rus", "echo.xml")
+        check("T42-12 提示词回显被拦截且不生成零变化输出",
+              not ok2 and not os.path.exists(body_path)
+              and job2.failed_strings >= 1)
     finally:
         shutil.rmtree(root2, ignore_errors=True)
 
@@ -2596,12 +2594,13 @@ def t52_session_hint_only():
             tm_lite=False)
         job.session_only_keys = {"Browning High-Power"}
         ok = job.run()
-        body = io.open(os.path.join(out, "configs", "text", "rus",
-                                    "string_table_enc_weapons.xml"),
-                       encoding="utf-8").read()
-        check("T52-1 会话词条绕过保护专名时不再硬替换",
-              ok and "Browning High-Power" in body
-              and "坏译" not in body and not srv.calls)
+        body_path = os.path.join(out, "configs", "text", "rus",
+                                 "string_table_enc_weapons.xml")
+        check("T52-1 会话词条绕过保护专名且不生成零变化输出",
+              ok and not os.path.exists(body_path)
+              and "坏译" not in (io.open(body_path, encoding="utf-8").read()
+                                 if os.path.exists(body_path) else "")
+              and not srv.calls)
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -2687,11 +2686,10 @@ def t54_credits_exact_protection():
             translate_literals=False, auto_session_terms=False,
             tm_lite=False)
         ok = job.run()
-        body = io.open(os.path.join(out, "configs", "text", "rus",
-                                    "stable_game_credits.xml"),
-                       encoding="utf-8").read()
-        check("T54-1 credits 命中核心词条也不改写",
-              ok and "<rus>Harris</rus>" in body and "哈里斯" not in body
+        body_path = os.path.join(out, "configs", "text", "rus",
+                                 "stable_game_credits.xml")
+        check("T54-1 credits 命中核心词条也不改写或生成文件",
+              ok and not os.path.exists(body_path)
               and not srv.calls)
         # 武器短名若有核心中文词条，仍应使用词条（不整表跳过）
         wdir = os.path.join(root, "weapon")
@@ -3179,7 +3177,7 @@ def t64_scene_batch_and_style():
         f.write("string_table".join(["", ""]) if False else
                 "[string_table]" + chr(10) + "language = rus" + chr(10)
                 + "files = d" + chr(10))
-    srv = _FakeServer(fn=lambda _t: "你好，潜行者。")
+    srv = _FakeServer(fn=lambda _t: "你好，我在听。")
     try:
         job, ok, _ = _run_ref_job(
             ait, ind, out, srv, protect_proper=False,
@@ -3189,7 +3187,7 @@ def t64_scene_batch_and_style():
         check("T64-1 连续短对话走批量请求",
               ok and job.batch_stats["batches"] >= 1
               and job.batch_stats["lines"] == 4
-              and body.count("你好，潜行者。") == 4,
+              and body.count("你好，我在听。") == 4,
               str(job.batch_stats))
         check("T64-2 分场景提示与温度选择",
               job._entry_style("configs/text/ui/ui_x.xml", "OK") == "label"

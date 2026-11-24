@@ -4,11 +4,9 @@
 基于 Hy-MT2 / llama.cpp，在本地完成 X-Ray 文本、cfgxml、ltx 与脚本的翻译，
 不依赖在线 API。
 
-**当前版本 1.9.24（2026-11-24）**：同步 2.x 姊妹仓库的 2.0.27（术语库交叉一致性
-审计，新方法）——同源跨类冲突 15 组全部统一（Loners→独行者、Wolf→狼、
-Cap→帽子、Mama's Beads→妈妈的念珠、Generator→发电机 等）、中文半角标点
-1087 条规范化、俄英同源（Мамины бусы 系列）对齐；交叉审计 S1/S4a 归零，
-两仓四副本同步。词库 24455 条（13 分类）。
+**当前版本 1.9.25（2026-11-25）**：小模型交付可靠性加固——零变化文本不落盘，
+旧账本按 pipeline + SHA-256 强制迁移，取消/写盘失败/终检硬失败不再报“全部完成”，
+生成 ID 定义表与正文保持事务一致，并补齐跨进程互斥与故障恢复。
 完整变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 仓库：<https://github.com/qy0214/stalker-localization-toolkit-ai-translate>
@@ -52,8 +50,8 @@ STALKER Localization Toolkit 1.1.0\
 | `plugins/ai_translate_assets/` | X-Ray 解析器 + 术语数据（随包只读） |
 | `使用说明.txt` | 安装、使用、已知限制 |
 | `THIRD_PARTY_NOTICES.md` | 第三方来源、许可状态与致谢 |
-| `dist/ai_translate_plugin_v1.9.24.zip` | 可直接分发的插件包 |
-| `CHANGELOG.md` | 1.6.0–1.9.24 各版本完整修复明细与证据 |
+| `dist/ai_translate_plugin_v1.9.25.zip` | 可直接分发的插件包 |
+| `CHANGELOG.md` | 1.6.0–1.9.25 各版本完整修复明细与证据 |
 | `tests/` | 回归测试（契约/功能/各版本专项）+ 分享包卫生测试 |
 | `tools/` | 术语库构建脚本 + 原始语料/词典 + 发布清单生成器 |
 | `RELEASE_MANIFEST.md` / `release_manifest.json` | 发布清单（版本、哈希、一致性核对） |
@@ -61,9 +59,9 @@ STALKER Localization Toolkit 1.1.0\
 
 ## 版本与校验
 
-- 插件版本：`ai_translate 1.9.24`
+- 插件版本：`ai_translate 1.9.25`
 - 当前 zip SHA-256：
-  `84f708102d176ae6f3ba8da2398c6698c13816859e4c3da90c8ab1cd309d049f`
+  `7bc31563fd8477b21a687e01c06c046a8eb4c1df9d795dd5afa5cc914aa07d90`
 - 下载链路官方哈希：llama.cpp `b11612` 的 6 个 Windows 包 + 2 个 HuggingFace 模型
 - 术语规模：`glossary_builtin.json` 24455 条 / `stalker_termbase.json` 24455 条；
   13 个分类，两文件条目数一致（随包表允许扁平 + 分类段混合结构）；
@@ -73,7 +71,7 @@ STALKER Localization Toolkit 1.1.0\
   2.x 仓库 `corpus/soft_reference_retired.json`，不参与直取与提示
 
 ```powershell
-Get-FileHash 'dist\ai_translate_plugin_v1.9.24.zip' -Algorithm SHA256
+Get-FileHash 'dist\ai_translate_plugin_v1.9.25.zip' -Algorithm SHA256
 ```
 
 完整核对结果见 [`RELEASE_MANIFEST.md`](RELEASE_MANIFEST.md)。
@@ -84,6 +82,7 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.24.zip' -Algorithm SHA256
 
 | 版本 | 摘要 |
 |---|---|
+| **1.9.25** | 小模型交付可靠性加固：零变化/原样回显不落盘；账本 pipeline + SHA-256 迁移；取消/异常/写盘失败/账本失败阻止完成；生成 ID 事务与损坏恢复；结构化终检、token 序列、语义/数字/上下文校验；跨进程互斥。新增 54 项交付闸门，11/11 测试文件全绿 |
 | **1.9.24** | 同步 2.0.27（术语库交叉一致性审计，新方法）：15 组同源冲突统一、1087 条中文半角标点规范化、Мамины бусы 系列与英文对齐；交叉审计 S1/S4a 归零，测试 10/10 全绿 |
 | 1.9.23 | 同步 2.0.26（术语库深度审查）：16 MOD / 1623 文件词频扫描 + 人工复核，新增「高频硬词」51 条挂 canon（地名格变补位、英文地名、CNPP/ЧАЭС 机组、Lab X-8/10/16/18、固定物品与 UI）；修正 9 处错译；词库 24456→24455（13 分类），测试 10/10 全绿 |
 | 1.9.22 | 同步 2.0.25（aera 审计 + 人工对照包比对）：ident 假跳过修复（`_name/_descr/_text/_title` 等 id 后缀豁免，2206 条找回）；强制术语长文阈值（≥600 字符走分段链）；上下文串入切片级兜底；字面换行收敛 11 条；CHS 人工对照收割 1932 条入「人工对照」硬层（P1/P2/P4）；口语化提示词锚例；词库 22524→24456，测试 10/10 全绿（新增 1.9.22 专项 24 项） |
@@ -98,8 +97,11 @@ Get-FileHash 'dist\ai_translate_plugin_v1.9.24.zip' -Algorithm SHA256
 ## 开发与测试
 
 ```powershell
-# 346 项回归测试
+# 348 项功能回归
 python tests/test_ai_translate_fixes.py
+
+# 54 项小模型交付闸门 / 中断恢复 / 跨进程互斥
+python tests/test_1925_delivery_gates.py
 
 # 分享包卫生 / 冷启动 / 只读位置 / 发布 zip 一致性
 python tests/test_share_package.py
