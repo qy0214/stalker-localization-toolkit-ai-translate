@@ -1,3 +1,11 @@
+> **【已归档 · ARCHIVED】本仓库已并入五合一单仓库（monorepo），新地址：**
+> **https://github.com/qy0214/stalker-localization-toolkit-ai-translate-2x**
+>
+> 1.9.x 插件现由上库 `products/plugin_1_9x/` 统一维护与发布（当前 1.9.25，
+> 与本库最后版本一致）；2.x 插件、Hermes MCP、在线 MCP/CLI 与技能均在同一
+> 单仓库共享同一解析核。本仓库自即日起只读归档，不再接受 issue / PR /
+> 新版本发布；请一律到上述单仓库。
+
 # stalker-localization-toolkit-ai-translate
 
 面向 **STALKER Localization Toolkit 1.1.0** 的离线 AI 翻译插件（`ai_translate`）。
